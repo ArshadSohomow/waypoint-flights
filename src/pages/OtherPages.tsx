@@ -37,7 +37,7 @@ export function ConfirmationPage() {
             ))}
           </ul>
           <p className="total-line">
-            Total paid <strong>{money(c.total)}</strong>
+            Demo total <strong>{money(c.total)}</strong> <span className="muted small">(nothing was charged)</span>
           </p>
         </section>
         <div className="page-actions">

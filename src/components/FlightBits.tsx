@@ -1,95 +1,225 @@
 import React, { useState } from 'react';
 import { Dialog } from './Dialog';
-import { airportByCode, Cabin, CABINS, FARE_CONDITIONS, Flight } from '../lib/data';
-import { duration, fullDate, shortDate } from '../lib/dates';
+import { airportByCode, airportShort, Bags, Cabin, CABINS, FareOffer, Itinerary, placeShort } from '../lib/data';
+import { addDays, duration, mediumDate, shortDate } from '../lib/dates';
+import { itineraryWarnings, JourneyWarning, SEVERITY_LABEL } from '../lib/warnings';
 
-export function Times({ f, big }: { f: Flight; big?: boolean }) {
+const city = (code: string) => airportByCode(code)?.city ?? code;
+const dayLabel = (base: string, offset: number) => shortDate(addDays(base, offset));
+
+/** Depart / arrive summary with explicit labels, day changes and stops. */
+export function JourneySummary({ it, big }: { it: Itinerary; big?: boolean }) {
   return (
-    <div className={`times ${big ? 'big' : ''}`}>
-      <p className="time-range">
-        {f.depart} – {f.arrive}
-        {f.arrivesNextDay && <sup title="Arrives the next day">+1</sup>}
-      </p>
-      <p className="codes">
-        <span>{f.from}</span>
-        <span>{f.to}</span>
+    <div className={`journey ${big ? 'big' : ''}`}>
+      <div className="jp">
+        <span className="jp-label">Departs</span>
+        <span className="jp-time">{it.depart}</span>
+        <span className="jp-code" title={airportShort(it.from)}>
+          {it.from}
+        </span>
+      </div>
+      <div className="jp-line" aria-hidden="true">
+        <span className="jp-dur">{duration(it.durationMin)}</span>
+        <span className="jp-track">
+          {it.layovers.map((_, i) => (
+            <i key={i} className="jp-stop" />
+          ))}
+        </span>
+        <span className="jp-stops">{stopText(it)}</span>
+      </div>
+      <div className="jp">
+        <span className="jp-label">Arrives</span>
+        <span className="jp-time">
+          {it.arrive}
+          {it.arriveDay > 0 && (
+            <span className="day-change" title={`Arrives ${dayLabel(it.date, it.arriveDay)}`}>
+              +{it.arriveDay}
+            </span>
+          )}
+        </span>
+        <span className="jp-code" title={airportShort(it.to)}>
+          {it.to}
+        </span>
+      </div>
+      <p className="sr-only">
+        Departs {it.depart} from {airportShort(it.from)}, arrives {it.arrive}
+        {it.arriveDay > 0 ? ` on ${dayLabel(it.date, it.arriveDay)}` : ''} at {airportShort(it.to)}. {duration(it.durationMin)} total, {stopText(it)}.
       </p>
     </div>
   );
 }
 
-export function StopInfo({ f }: { f: Flight }) {
+export function stopText(it: Itinerary) {
+  if (!it.stops) return 'Direct';
+  return `${it.stops} stop${it.stops > 1 ? 's' : ''} · ${it.layovers.map((l) => (l.arriveAt === l.departFrom ? l.arriveAt : `${l.arriveAt}→${l.departFrom}`)).join(', ')}`;
+}
+
+/** Chronological itinerary: every flight and layover, with local dates and times. */
+export function Timeline({ it }: { it: Itinerary }) {
   return (
-    <p className="stops">
-      Direct <span aria-hidden="true">·</span> <span className="sr-only">,</span> {duration(f.durationMin)}
-    </p>
+    <ol className="timeline" aria-label="Itinerary, in order">
+      {it.segments.map((s, i) => (
+        <React.Fragment key={i}>
+          <li className="tl-flight">
+            <div className="tl-row">
+              <span className="tl-when">
+                <span className="tl-label">Departs</span> <strong>{s.depart}</strong> <span className="tl-date">{dayLabel(it.date, s.departDay)}</span>
+              </span>
+              <span className="tl-where">{airportShort(s.from)}</span>
+            </div>
+            <p className="tl-meta">
+              Flight {s.number} · {s.carrier} · {s.aircraft} · {duration(s.durationMin)} flight
+            </p>
+            <div className="tl-row">
+              <span className="tl-when">
+                <span className="tl-label">Arrives</span> <strong>{s.arrive}</strong> <span className="tl-date">{dayLabel(it.date, s.arriveDay)}</span>
+              </span>
+              <span className="tl-where">{airportShort(s.to)}</span>
+            </div>
+          </li>
+          {it.layovers[i] && (
+            <li className={`tl-layover ${it.layovers[i].arriveAt !== it.layovers[i].departFrom ? 'change' : ''}`}>
+              <span className="tl-label">Layover</span> {duration(it.layovers[i].minutes)} in {city(it.layovers[i].arriveAt)}
+              {it.layovers[i].arriveAt !== it.layovers[i].departFrom && (
+                <strong>
+                  {' '}
+                  · change airports: {it.layovers[i].arriveAt} → {it.layovers[i].departFrom}
+                </strong>
+              )}
+              {it.layovers[i].overnight && <strong> · overnight</strong>}
+              {it.selfTransfer && <span> · self-transfer, separate ticket</span>}
+            </li>
+          )}
+        </React.Fragment>
+      ))}
+      <li className="tl-note">Times are local to each airport.</li>
+    </ol>
   );
 }
 
-export function FlightDetailsButton({ f }: { f: Flight }) {
+export function WarningList({ warnings, compact }: { warnings: JourneyWarning[]; compact?: boolean }) {
+  if (!warnings.length) return null;
+  return (
+    <ul className={`warnings ${compact ? 'compact' : ''}`} aria-label="Things to know about this journey">
+      {warnings.map((w) => (
+        <li key={w.id} className={`warn ${w.severity}`}>
+          <span className={`sev sev-${w.severity}`}>
+            <span aria-hidden="true">{w.severity === 'important' ? '!' : w.severity === 'check' ? '?' : 'i'}</span> {SEVERITY_LABEL[w.severity]}
+          </span>
+          <span className="warn-title">{w.title}</span>
+          {!compact && (
+            <details className="warn-more">
+              <summary>Why this matters</summary>
+              <p>{w.why}</p>
+              <p>
+                <strong>What to do:</strong> {w.next}
+              </p>
+              {w.basis === 'possible' && <p className="muted small">This is a possible consideration, not a confirmed outcome.</p>}
+              {w.link && (
+                <p className="small">
+                  <a href={w.link.href} target="_blank" rel="noopener noreferrer">
+                    {w.link.label} (opens in a new tab)
+                  </a>{' '}
+                  · {w.link.covers}
+                </p>
+              )}
+            </details>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function bagsText(b: Bags) {
+  const cabin = `${b.cabinBags} cabin bag${b.cabinBags > 1 ? 's' : ''}${b.cabinKg ? ` up to ${b.cabinKg} kg` : ''}`;
+  const checked = b.checkedBags ? `${b.checkedBags} checked bag${b.checkedBags > 1 ? 's' : ''}${b.checkedKg ? ` up to ${b.checkedKg} kg` : ''}` : 'No checked bag';
+  return { cabin, checked };
+}
+
+/** What a fare includes, in plain language. */
+export function FareFacts({ offer }: { offer: Extract<FareOffer, { available: true }> }) {
+  const b = bagsText(offer.bags);
+  const ch = { free: 'Changes: free', fee: 'Changes: allowed for a fee', 'not-allowed': 'Changes: not allowed', unknown: 'Changes: rules not supplied' }[offer.rules.changes];
+  const rf = { full: 'Refund: yes', partial: 'Refund: partial', none: 'Refund: no', unknown: 'Refund: rules not supplied' }[offer.rules.refund];
+  return (
+    <ul className="facts">
+      <li className="yes">{b.cabin}</li>
+      <li className={offer.bags.checkedBags ? 'yes' : 'no'}>{b.checked}</li>
+      {offer.perks.map((p) => (
+        <li key={p} className="yes">
+          {p}
+        </li>
+      ))}
+      <li className={offer.rules.changes === 'free' ? 'yes' : offer.rules.changes === 'unknown' ? 'unknown' : 'part'}>{ch}</li>
+      <li className={offer.rules.refund === 'full' ? 'yes' : offer.rules.refund === 'unknown' ? 'unknown' : 'no'}>{rf}</li>
+    </ul>
+  );
+}
+
+export function FareConditionsButton({ offer, label }: { offer: Extract<FareOffer, { available: true }>; label?: string }) {
   const [open, setOpen] = useState(false);
-  const a = airportByCode(f.from)!;
-  const b = airportByCode(f.to)!;
+  const c = CABINS.find((x) => x.id === offer.cabin)!;
+  const b = bagsText(offer.bags);
   return (
     <>
       <button type="button" className="link-btn" onClick={() => setOpen(true)}>
-        Flight details<span className="sr-only">, {f.depart} {f.from} to {f.to}</span>
+        {label ?? `${c.name} fare rules`}
       </button>
-      <Dialog open={open} onClose={() => setOpen(false)} title={`Flight ${f.number}`}>
+      <Dialog open={open} onClose={() => setOpen(false)} title={`${c.name}: what’s included`}>
         <dl className="details">
-          <dt>Date</dt>
-          <dd>{fullDate(f.date)}</dd>
-          <dt>Departs</dt>
-          <dd>{f.depart} from {a.city} ({a.code})</dd>
-          <dt>Arrives</dt>
+          <dt>Cabin baggage</dt>
+          <dd>{b.cabin}</dd>
+          <dt>Checked baggage</dt>
           <dd>
-            {f.arrive}
-            {f.arrivesNextDay ? ' the next day' : ''} at {b.city} ({b.code})
+            {b.checked}
+            {offer.bags.checkedBags > 0 && offer.bags.checkedKg === null ? ' (weight not supplied)' : ''}
           </dd>
-          <dt>Flight time</dt>
-          <dd>{duration(f.durationMin)}, direct</dd>
-          <dt>Aircraft</dt>
-          <dd>{f.aircraft}</dd>
-          <dt>Operated by</dt>
-          <dd>Waypoint Air</dd>
+          <dt>Changes</dt>
+          <dd>{offer.rules.changesText}</dd>
+          <dt>Refunds</dt>
+          <dd>{offer.rules.refundText}</dd>
+          <dt>Also included</dt>
+          <dd>{offer.perks.join(', ')}</dd>
         </dl>
-        <p className="muted">Times are local to each airport.</p>
+        <p className="muted small">Sample fare rules for this demo. Bag size limits aren’t supplied in the sample data.</p>
       </Dialog>
     </>
   );
 }
 
-export function FareConditionsButton({ cabin, label = 'Fare conditions' }: { cabin: Cabin; label?: string }) {
+export function FlightDetailsButton({ it }: { it: Itinerary }) {
   const [open, setOpen] = useState(false);
-  const c = CABINS.find((x) => x.id === cabin)!;
+  const warnings = itineraryWarnings(it);
   return (
     <>
       <button type="button" className="link-btn" onClick={() => setOpen(true)}>
-        {label}
+        Journey details<span className="sr-only">, departs {it.depart} from {it.from}</span>
       </button>
-      <Dialog open={open} onClose={() => setOpen(false)} title={`${c.name} fare conditions`}>
-        <ul className="ticks">
-          {FARE_CONDITIONS[cabin].map((t) => (
-            <li key={t}>{t}</li>
-          ))}
-        </ul>
-        <p className="muted">Sample conditions for this demonstration.</p>
+      <Dialog open={open} onClose={() => setOpen(false)} title={`${placeShort(it.from)} to ${placeShort(it.to)}, ${mediumDate(it.date)}`} wide>
+        <Timeline it={it} />
+        <WarningList warnings={warnings} />
       </Dialog>
     </>
   );
 }
 
-export function RouteHeading({ from, to, date, level = 2 }: { from: string; to: string; date?: string; level?: 1 | 2 }) {
-  const a = airportByCode(from);
-  const b = airportByCode(to);
-  const H = level === 1 ? 'h1' : 'h2';
+export function RouteHeading({ from, to, level = 2, className = '' }: { from: string; to: string; level?: 1 | 2 | 3; className?: string }) {
+  const H = (level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3') as 'h1';
   return (
-    <H className="route-heading">
-      <span>{a?.city} ({from})</span>
-      <span className="arrow" aria-hidden="true">→</span>
+    <H className={`route-heading ${className}`}>
+      <span>{placeShort(from)}</span>
+      <span className="arrow" aria-hidden="true">
+        →
+      </span>
       <span className="sr-only"> to </span>
-      <span>{b?.city} ({to})</span>
-      {date && <span className="route-date">{shortDate(date)}</span>}
+      <span>{placeShort(to)}</span>
     </H>
   );
 }
+
+export function SampleTag({ children = 'Sample price' }: { children?: React.ReactNode }) {
+  return <span className="sample-tag">{children}</span>;
+}
+
+export const cabinName = (c: Cabin) => CABINS.find((x) => x.id === c)!.name;

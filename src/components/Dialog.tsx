@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 // Native <dialog> gives focus trapping, Escape to close and inert background for free.
-export function Dialog({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode }) {
+export function Dialog({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const d = ref.current;
@@ -13,7 +13,7 @@ export function Dialog({ open, onClose, title, children, footer }: { open: boole
   return (
     <dialog
       ref={ref}
-      className="dialog"
+      className={`dialog ${wide ? 'wide' : ''}`}
       aria-labelledby={id}
       onClose={onClose}
       onClick={(e) => {
@@ -22,11 +22,11 @@ export function Dialog({ open, onClose, title, children, footer }: { open: boole
     >
       <div className="dialog-head">
         <h2 id={id}>{title}</h2>
-        <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
-          ✕
+        <button type="button" className="close-btn" onClick={onClose}>
+          <span aria-hidden="true">✕</span> Close
         </button>
       </div>
-      <div className="dialog-body">{children}</div>
+      <div className="dialog-body">{open && children}</div>
       {footer && <div className="dialog-foot">{footer}</div>}
     </dialog>
   );

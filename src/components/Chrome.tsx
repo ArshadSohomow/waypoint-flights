@@ -1,19 +1,18 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useRouter } from '../lib/router';
 import { useComingSoon } from './Dialog';
-import { useBooking, priceTotal, money, totalPax } from '../lib/booking';
-import { airportByCode } from '../lib/data';
-import { longDate } from '../lib/dates';
+import { costs, money, progress, totalPax, useBooking } from '../lib/booking';
+import { placeShort, DATA_STATUS_LABEL } from '../lib/data';
+import { mediumDate } from '../lib/dates';
+import { CostBreakdown, SelectedJourneys } from './Costs';
+import { AmbientControls, Beacon } from './Sky';
 
 export const BRAND = 'Waypoint';
 
 function Logo() {
   return (
     <Link to="/" className="logo" aria-label={`${BRAND} home`}>
-      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
-        <circle cx="14" cy="14" r="13" fill="var(--accent)" />
-        <path d="M7 16.5 21 9l-4.5 12-2.6-5.2z" fill="#fff" />
-      </svg>
+      <Beacon size={28} />
       <span>{BRAND}</span>
     </Link>
   );
@@ -71,27 +70,52 @@ export function SiteHeader() {
   );
 }
 
-export const STEPS = ['Flights', 'Seats', 'Summary', 'Passengers', 'Payment'];
+export const STEPS: { name: string; to: string }[] = [
+  { name: 'Flights', to: '/flights/outbound' },
+  { name: 'Seats', to: '/seats/outbound' },
+  { name: 'Bags & extras', to: '/summary' },
+  { name: 'Passengers', to: '/passengers' },
+  { name: 'Review', to: '/payment' },
+];
 
 function Stepper({ current }: { current: number }) {
+  const { booking } = useBooking();
+  const p = progress(booking);
+  const reached = [true, p.flights, p.flights && p.seats, p.flights && p.seats, p.flights && p.seats && p.passengers];
   return (
-    <ol className="stepper" aria-label="Booking progress">
-      {STEPS.map((s, i) => {
-        const n = i + 1;
-        const state = n < current ? 'done' : n === current ? 'current' : 'todo';
-        return (
-          <li key={s} className={state} aria-current={state === 'current' ? 'step' : undefined}>
-            <span className="dot" aria-hidden="true">
-              {state === 'done' ? '✓' : n}
-            </span>
-            <span className="step-name">
-              {s}
-              <span className="sr-only">{state === 'done' ? ', completed' : state === 'todo' ? ', not started' : ''}</span>
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+    <nav aria-label="Booking progress" className="stepper-nav">
+      <ol className="stepper">
+        {STEPS.map((s, i) => {
+          const n = i + 1;
+          const state = n < current ? 'done' : n === current ? 'current' : 'todo';
+          const inner = (
+            <>
+              <span className="dot" aria-hidden="true">
+                {state === 'done' ? '✓' : n}
+              </span>
+              <span className="step-name">
+                {s.name}
+                <span className="sr-only">{state === 'done' ? ', completed' : state === 'todo' ? ', not started' : ', current step'}</span>
+              </span>
+            </>
+          );
+          return (
+            <li key={s.name} className={state} aria-current={state === 'current' ? 'step' : undefined}>
+              {state === 'done' && reached[i] ? (
+                <Link to={s.to} className="step-link">
+                  {inner}
+                </Link>
+              ) : (
+                <span className="step-link">{inner}</span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      <p className="step-mobile" aria-hidden="true">
+        Step {current} of {STEPS.length}: {STEPS[current - 1].name}
+      </p>
+    </nav>
   );
 }
 
@@ -102,45 +126,85 @@ export function BookingHeader({ step }: { step: number }) {
       <div className="bar wrap">
         <Logo />
         <Stepper current={step} />
-        <button type="button" className="btn btn-outline" onClick={() => soon('Login')}>
+        <button type="button" className="btn btn-outline hide-sm" onClick={() => soon('Login')}>
           Login
         </button>
       </div>
       <TripBar />
+      <Notice />
     </header>
   );
 }
 
 function TripBar() {
   const { booking } = useBooking();
-  const { navigate } = useRouter();
+  const { navigate, path } = useRouter();
+  const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => setOpen(false), [path]);
   const s = booking.search;
   if (!s) return null;
-  const from = airportByCode(s.from);
-  const to = airportByCode(s.to);
   const n = totalPax(s.pax);
+  const { total, lines } = costs(booking);
   return (
     <div className="trip-bar">
       <div className="wrap trip-bar-inner">
-        <div>
+        <div className="trip-bar-main">
           <p className="trip-route">
-            {from?.city} ({s.from}) <span aria-hidden="true">{s.tripType === 'round' ? '⇄' : '→'}</span>
-            <span className="sr-only">{s.tripType === 'round' ? ' to and from ' : ' to '}</span> {to?.city} ({s.to})
+            {placeShort(s.from)} <span aria-hidden="true">{s.tripType === 'round' ? '⇄' : '→'}</span>
+            <span className="sr-only">{s.tripType === 'round' ? ' to and from ' : ' to '}</span> {placeShort(s.to)}
           </p>
           <p className="trip-meta">
-            <span>{s.tripType === 'round' && s.ret ? `${longDate(s.depart)} – ${longDate(s.ret)}` : longDate(s.depart)}</span>
+            <span>{s.tripType === 'round' && s.ret ? `${mediumDate(s.depart)} – ${mediumDate(s.ret)}` : mediumDate(s.depart)}</span>
             <span>
-              {n} passenger{n === 1 ? '' : 's'}
+              {n} traveller{n === 1 ? '' : 's'}
             </span>
             <span>{s.tripType === 'round' ? 'Round trip' : 'One way'}</span>
           </p>
           <button type="button" className="btn btn-small btn-outline" onClick={() => navigate('/')}>
-            Edit search
+            <span>
+              Edit search<span className="hide-sm">: airports, dates or travellers</span>
+            </span>
           </button>
         </div>
-        <p className="trip-total" aria-live="polite">
-          <span className="trip-total-label">Total</span> {money(priceTotal(booking))}
-        </p>
+        <div className="trip-bar-total">
+          <p className="trip-total" aria-live="polite">
+            <span className="trip-total-label">Estimated total{lines.length ? ` · ${n} traveller${n === 1 ? '' : 's'}` : ''}</span>
+            <span className="trip-total-amount">{lines.length ? money(total) : 'Choose a flight'}</span>
+          </p>
+          <button type="button" className="link-btn" aria-expanded={open} aria-controls="trip-panel" onClick={() => setOpen((o) => !o)}>
+            {open ? 'Hide trip summary' : 'Show trip summary'}
+          </button>
+        </div>
+      </div>
+      {open && (
+        <div id="trip-panel" className="trip-panel" ref={panelRef} role="region" aria-label="Trip summary">
+          <div className="wrap trip-panel-inner">
+            <div>
+              <h2 className="panel-title">Your trip so far</h2>
+              <SelectedJourneys />
+            </div>
+            <CostBreakdown />
+            <button type="button" className="close-btn trip-panel-close" onClick={() => setOpen(false)}>
+              <span aria-hidden="true">✕</span> Close summary
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Notice() {
+  const { booking, dispatch } = useBooking();
+  if (!booking.notice) return null;
+  return (
+    <div className="notice-bar" role="status">
+      <div className="wrap notice-inner">
+        <p>{booking.notice}</p>
+        <button type="button" className="close-btn" onClick={() => dispatch({ type: 'clearNotice' })}>
+          <span aria-hidden="true">✕</span> Dismiss
+        </button>
       </div>
     </div>
   );
@@ -149,10 +213,11 @@ function TripBar() {
 export function SiteFooter() {
   return (
     <footer className="site-footer">
-      <div className="wrap">
+      <div className="wrap footer-inner">
         <p>
-          <strong>{BRAND}</strong> is a demonstration site. Flights, prices and seats are sample data; no real bookings or payments are made.
+          <strong>{BRAND}</strong> is a demonstration site. {DATA_STATUS_LABEL}; no real bookings, tickets or payments are made.
         </p>
+        <AmbientControls />
       </div>
     </footer>
   );

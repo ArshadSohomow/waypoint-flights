@@ -1,47 +1,73 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BookingHeader, SiteFooter } from '../components/Chrome';
-import { Times, StopInfo, FlightDetailsButton, RouteHeading } from '../components/FlightBits';
-import { chosenFlight, Choice, Leg, money, priceTotal, progress, seatedCount, useBooking } from '../lib/booking';
-import { CABINS } from '../lib/data';
-import { shortDate } from '../lib/dates';
+import { FareConditionsButton, FareFacts, JourneySummary, RouteHeading, Timeline, WarningList, cabinName } from '../components/FlightBits';
+import { CostBreakdown } from '../components/Costs';
+import { chosen, Choice, Leg, money, progress, seatedCount, useBooking } from '../lib/booking';
+import { offerOf, seatPosition } from '../lib/data';
+import { fullDate } from '../lib/dates';
+import { itineraryWarnings, pairWarnings } from '../lib/warnings';
 import { Link, Redirect, useRouter } from '../lib/router';
 
-export function LegCard({ leg, choice, seats, changeTo, showSeats }: { leg: Leg; choice: Choice; seats?: string[]; changeTo?: string; showSeats?: boolean }) {
+/** One chosen journey: summary, timeline on demand, fare facts, price basis and its warnings. */
+export function LegCard({ leg, choice, seats, changeTo, showSeats, showWarnings = true }: { leg: Leg; choice: Choice; seats?: string[]; changeTo?: string; showSeats?: boolean; showWarnings?: boolean }) {
   const { booking } = useBooking();
-  const f = chosenFlight(choice);
-  if (!f) return null;
-  const cabin = CABINS.find((c) => c.id === choice.cabin)!;
+  const [showTimeline, setShowTimeline] = useState(false);
+  const it = chosen(choice);
+  if (!it) return null;
+  const offer = offerOf(it, choice.cabin);
   const seated = booking.search ? seatedCount(booking.search.pax) : 1;
   const seatList = (seats ?? []).filter(Boolean);
   return (
-    <section className="leg-card" aria-label={leg === 'outbound' ? 'Outbound flight' : 'Return flight'}>
+    <section className="leg-card" aria-label={leg === 'outbound' ? 'Outbound journey' : 'Return journey'}>
       <div className="leg-card-head">
-        <RouteHeading from={f.from} to={f.to} />
+        <div>
+          <p className="leg-kind">{leg === 'outbound' ? 'Outbound' : 'Return'}</p>
+          <RouteHeading from={it.from} to={it.to} level={3} />
+        </div>
         {changeTo && (
-          <Link to={changeTo} className="link-btn">
-            Change<span className="sr-only"> {leg} flight</span>
+          <Link to={changeTo} className="btn btn-small btn-outline">
+            Change<span className="sr-only"> {leg} journey</span>
           </Link>
         )}
       </div>
       <div className="leg-card-body">
         <div>
-          <p className="leg-date">{shortDate(f.date)}</p>
-          <Times f={f} big />
-          <p className="operated">Flight {f.number} · Operated by Waypoint Air</p>
-        </div>
-        <div className="leg-mid">
-          <StopInfo f={f} />
-          <FlightDetailsButton f={f} />
+          <p className="leg-date">{fullDate(it.date)}</p>
+          <JourneySummary it={it} big />
+          <button type="button" className="link-btn" aria-expanded={showTimeline} onClick={() => setShowTimeline((v) => !v)}>
+            {showTimeline ? 'Hide each flight' : 'Show each flight and layover'}
+          </button>
         </div>
         <div className="leg-cabin">
-          <p className="cabin-name">{cabin.name}</p>
-          {showSeats && <p className="seat-line">{seatList.length ? `Seat${seatList.length > 1 ? 's' : ''}: ${seatList.join(', ')}` : 'No seats chosen'}</p>}
+          <p className="cabin-name">{cabinName(choice.cabin)}</p>
+          {offer && <FareFacts offer={offer} />}
+          {offer && <FareConditionsButton offer={offer} />}
+          {showSeats && (
+            <p className="seat-line">
+              {it.selfTransfer
+                ? 'Seats: allocated at check-in (separate tickets)'
+                : seatList.length
+                  ? `Seat${seatList.length > 1 ? 's' : ''}: ${seatList.map((x) => `${x} (${seatPosition(x).toLowerCase()})`).join(', ')}`
+                  : 'No seats chosen'}
+              {!it.selfTransfer && it.segments.length > 1 && seatList.length > 0 && <span className="muted small"> · first flight; connecting-flight seats are allocated at check-in</span>}
+            </p>
+          )}
         </div>
-        <p className="leg-price">
-          {money(f.fares[choice.cabin] * seated)}
-          {seated > 1 && <span className="per">{money(f.fares[choice.cabin])} × {seated}</span>}
-        </p>
+        {offer && (
+          <p className="leg-price">
+            {money(offer.price * seated)}
+            <span className="per">
+              {money(offer.price)} per person × {seated}
+            </span>
+          </p>
+        )}
       </div>
+      {showTimeline && (
+        <div className="leg-timeline">
+          <Timeline it={it} />
+        </div>
+      )}
+      {showWarnings && <WarningList warnings={itineraryWarnings(it)} />}
     </section>
   );
 }
@@ -53,25 +79,33 @@ export function ReviewPage() {
   if (!booking.search) return <Redirect to="/" />;
   if (!p.flights) return <Redirect to={p.outbound ? '/flights/return' : '/flights/outbound'} />;
   const round = booking.search.tripType === 'round';
+  const pw = pairWarnings(chosen(booking.outbound), round ? chosen(booking.ret) : undefined);
   return (
     <>
       <BookingHeader step={1} />
-      <main id="main" className="wrap page-review narrow">
-        <p className="eyebrow">Step 1 of 5 · Review</p>
+      <main id="main" className="wrap page-review">
+        <p className="eyebrow">Step 1 of 5 · Check your flights</p>
         <h1>Review flights</h1>
-        <LegCard leg="outbound" choice={booking.outbound!} changeTo="/flights/outbound" />
-        {round && booking.ret && <LegCard leg="return" choice={booking.ret} changeTo="/flights/return" />}
-        <div className="page-actions">
-          <p className="total-line">
-            Total <strong>{money(priceTotal(booking))}</strong>
-          </p>
-          <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate('/seats/outbound')}>
-            Continue to seats
-          </button>
+        <div className="summary-layout">
+          <div>
+            <LegCard leg="outbound" choice={booking.outbound!} changeTo="/flights/outbound" />
+            {round && booking.ret && <LegCard leg="return" choice={booking.ret} changeTo="/flights/return" />}
+            {pw.length > 0 && (
+              <section className="panel">
+                <h2>About the whole trip</h2>
+                <WarningList warnings={pw} />
+              </section>
+            )}
+          </div>
+          <aside className="summary-side">
+            <CostBreakdown title="Estimated cost so far" />
+            <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => navigate('/seats/outbound')}>
+              Continue to seats
+            </button>
+          </aside>
         </div>
       </main>
       <SiteFooter />
     </>
   );
 }
-
