@@ -1,5 +1,6 @@
 import React from 'react';
 import { SiteHeader, SiteFooter } from '../components/Chrome';
+import { SkyHero } from '../components/Sky';
 import { LegCard } from './ReviewPage';
 import { money, useBooking } from '../lib/booking';
 import { Link, Redirect, useRouter } from '../lib/router';
@@ -13,6 +14,7 @@ export function ConfirmationPage() {
   return (
     <>
       <SiteHeader />
+      <SkyHero compact />
       <main id="main" className="wrap page-confirm narrow">
         <div className="confirm-hero">
           <p className="tick" aria-hidden="true">✓</p>

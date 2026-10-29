@@ -2108,3 +2108,77 @@ a.step-link:hover .step-name { text-decoration: underline; }
 }
 .cmp-cards .details { grid-template-columns: 1fr; gap: 0; }
 .cmp-cards .details dt { margin-top: 10px; font-size: 0.8rem; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.cal td.sel button,
+.cal td.sel button:hover:not(:disabled) { background: var(--accent); color: #fff; }
+
+/* ===================================================================
+   Beacons over the globe: ambient identity (hero band + logo only)
+   =================================================================== */
+.beacon-mark { position: relative; display: inline-block; flex: none; }
+.beacon-mark svg { position: relative; display: block; }
+.beacon-halo { position: absolute; inset: -5px; border-radius: 50%; background: radial-gradient(circle, rgba(242, 190, 92, 0.55), rgba(242, 190, 92, 0) 70%); opacity: 0.35; }
+
+.sky-hero {
+  --sky-top: #9cc8e6; --sky-bottom: #e7f1f5; --globe-hi: #2f7d82; --globe-lo: #0d4a52; --beacon: #ffd27a; --sky-ink: #0f2f36; --sky-ink-2: #23484f;
+  --cloud: rgba(255, 255, 255, 0.85); --star: transparent; --route: rgba(255, 224, 150, 0.75); --grid: rgba(255, 255, 255, 0.10); --mist: rgba(255, 255, 255, 0);
+  position: relative; overflow: hidden; height: 300px; background: linear-gradient(180deg, var(--sky-top), var(--sky-bottom));
+  isolation: isolate; contain: paint;
+}
+.sky-hero.sky-dusk {
+  --sky-top: #2c3a64; --sky-bottom: #e49a6b; --globe-hi: #3a5d78; --globe-lo: #14273d; --sky-ink: #ffffff; --sky-ink-2: #ffffff;
+  --cloud: rgba(255, 214, 186, 0.45); --star: rgba(255, 255, 255, 0.55); --mist: rgba(255, 205, 170, 0.25);
+}
+.sky-hero.sky-night {
+  --sky-top: #0b1530; --sky-bottom: #1d3557; --globe-hi: #1f4a5e; --globe-lo: #08202c; --sky-ink: #ffffff; --sky-ink-2: #d5e2ef;
+  --cloud: rgba(170, 190, 220, 0.16); --star: rgba(255, 255, 255, 0.85); --mist: rgba(120, 150, 190, 0.12);
+}
+.sky-hero.compact { height: 150px; }
+.sky-art { position: absolute; inset: 0; z-index: -1; }
+.globe { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; }
+.stars circle { fill: var(--star); }
+.graticule ellipse { stroke: var(--grid); stroke-width: 1; }
+.routes path { stroke: var(--route); stroke-width: 1.4; stroke-dasharray: 3 7; opacity: 0.55; }
+.beacons .core { fill: var(--beacon); }
+.beacons .glow { fill: var(--beacon); opacity: 0.18; transform-box: fill-box; transform-origin: center; }
+.cloud { position: absolute; border-radius: 50%; background: radial-gradient(closest-side, var(--cloud), transparent); filter: blur(2px); }
+.cloud.c1 { width: 520px; height: 120px; top: 30px; left: -80px; }
+.cloud.c2 { width: 420px; height: 100px; top: 90px; right: -60px; opacity: 0.8; }
+.cloud.c3 { width: 300px; height: 70px; top: 150px; left: 40%; opacity: 0.5; }
+.mist { position: absolute; inset: auto 0 0 0; height: 120px; background: linear-gradient(180deg, transparent, var(--mist)); }
+.sky-content { position: relative; padding-top: 40px; text-align: center; }
+.sky-title { font-size: clamp(1.6rem, 3.4vw, 2.3rem); font-weight: 700; margin: 0; color: var(--sky-ink); letter-spacing: -0.01em; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.12); }
+.sky-sub { margin: 6px 0 0; color: var(--sky-ink-2); font-size: 1.05rem; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.12); }
+.sky-hero + main.page-search { padding-top: 0; }
+.sky-hero + main .search-card { margin-top: -84px; position: relative; }
+.sky-hero.compact + main { padding-top: 0; }
+.sky-hero.compact + main .confirm-hero { margin-top: -70px; position: relative; }
+
+/* Motion: slow, low-amplitude, staggered. Only when allowed. */
+[data-motion='on'] .beacon-halo { animation: halo 6s ease-in-out infinite; }
+[data-motion='on'] .beacons .glow { animation: beacon 8s ease-in-out infinite; }
+[data-motion='on'] .stars .tw { animation: twinkle 9s ease-in-out infinite; }
+[data-motion='on'] .routes path { animation: route-flow 14s linear infinite; }
+[data-motion='on'] .cloud.c1 { animation: drift 90s ease-in-out infinite alternate; }
+[data-motion='on'] .cloud.c2 { animation: drift 120s ease-in-out infinite alternate-reverse; }
+[data-motion='on'] .cloud.c3 { animation: drift 150s ease-in-out infinite alternate; }
+[data-tab-hidden] * { animation-play-state: paused !important; }
+@keyframes halo { 0%, 100% { opacity: 0.25; transform: scale(0.92); } 50% { opacity: 0.55; transform: scale(1.05); } }
+@keyframes beacon { 0%, 100% { opacity: 0.12; transform: scale(0.85); } 50% { opacity: 0.32; transform: scale(1.12); } }
+@keyframes twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@keyframes route-flow { to { stroke-dashoffset: -100; } }
+@keyframes drift { from { transform: translateX(-30px); } to { transform: translateX(40px); } }
+@media (prefers-reduced-motion: reduce) {
+  [data-motion] .beacon-halo, [data-motion] .beacons .glow, [data-motion] .stars .tw, [data-motion] .routes path, [data-motion] .cloud { animation: none !important; }
+}
+.ambient-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ambient-controls label { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+.ambient-controls select { min-height: 36px; border-radius: 999px; border: 1.5px solid var(--line); padding: 0 12px; background: var(--surface); }
+@media (max-width: 720px) {
+  .sky-hero { height: 220px; }
+  .sky-content { padding-top: 26px; }
+  .sky-hero + main .search-card { margin-top: -70px; }
+  .sky-sub { font-size: 0.95rem; }
+}
+
+.sky-dusk .sky-title, .sky-night .sky-title, .sky-dusk .sky-sub, .sky-night .sky-sub { text-shadow: 0 1px 3px rgba(5, 12, 30, 0.55), 0 0 18px rgba(5, 12, 30, 0.35); }
+.sky-hero.sky-dusk { background: linear-gradient(180deg, #26335a 0%, #3b3f69 48%, #b9786a 78%, #e49a6b 100%); }

@@ -13,6 +13,7 @@ import { PaymentPage } from './pages/PaymentPage';
 import { ComparePage } from './pages/ComparePage';
 import { ConfirmationPage, ErrorBoundary, NotFoundPage } from './pages/OtherPages';
 import { BRAND } from './components/Chrome';
+import { SkyProvider } from './components/Sky';
 
 const TITLES: Record<string, string> = {
   '/': 'Book a flight',
@@ -69,12 +70,14 @@ createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <RouterProvider>
+        <SkyProvider>
         <BookingProvider>
           <ComingSoonProvider>
             <a className="skip-link" href="#main">Skip to main content</a>
             <Routes />
           </ComingSoonProvider>
         </BookingProvider>
+        </SkyProvider>
       </RouterProvider>
     </ErrorBoundary>
   </React.StrictMode>,

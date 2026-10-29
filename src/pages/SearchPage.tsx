@@ -4,6 +4,7 @@ import { AirportField } from '../components/AirportField';
 import { DateRange } from '../components/DateRange';
 import { PassengerField } from '../components/PassengerField';
 import { useComingSoon } from '../components/Dialog';
+import { SkyHero } from '../components/Sky';
 import { Search, useBooking, money } from '../lib/booking';
 import { airportByCode, DESTINATIONS, SALES, lowestFare, placeAirports, placeByCode } from '../lib/data';
 import { addDays, todayISO } from '../lib/dates';
@@ -68,6 +69,10 @@ export function SearchPage() {
   return (
     <>
       <SiteHeader />
+      <SkyHero>
+        <p className="sky-title">Find a flight that fits.</p>
+        <p className="sky-sub">Every cost and catch in plain sight, before you commit.</p>
+      </SkyHero>
       <main id="main" className="wrap page-search">
         <h1 className="sr-only">Book a flight</h1>
         <section className="search-card" aria-labelledby="search-heading">
