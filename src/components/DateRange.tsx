@@ -1,5 +1,6 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
-import { addDays, fullDate, monthGrid, MONTHS, parseISO, todayISO, ukDate } from '../lib/dates';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { addDays, fullDate, mediumDate, monthGrid, MONTHS, parseISO, todayISO } from '../lib/dates';
+import { lowestFare } from '../lib/data';
 
 const MAX_AHEAD = 330;
 
@@ -10,9 +11,11 @@ type Props = {
   onChange: (depart: string, ret: string | null) => void;
   departError?: string;
   returnError?: string;
+  from?: string;
+  to?: string;
 };
 
-export function DateRange({ depart, ret, round, onChange, departError, returnError }: Props) {
+export function DateRange({ depart, ret, round, onChange, departError, returnError, from, to }: Props) {
   const [open, setOpen] = useState<null | 'depart' | 'return'>(null);
   const [draftD, setDraftD] = useState(depart);
   const [draftR, setDraftR] = useState<string | null>(ret);
@@ -99,13 +102,24 @@ export function DateRange({ depart, ret, round, onChange, departError, returnErr
   });
 
   const confirmDisabled = !draftD || (round && !draftR);
+  // Sample price per day for the leg being chosen: outbound uses from→to, return uses to→from.
+  const priced = !!from && !!to && from !== to;
+  const prices = useMemo(() => {
+    const m = new Map<string, number | null>();
+    if (!priced || !open) return m;
+    const [a, b] = open === 'return' && round ? [to!, from!] : [from!, to!];
+    for (const { y, m: mo } of months) for (const week of monthGrid(y, mo)) for (const d of week) if (d && d >= today && d <= last) m.set(d, lowestFare(a, b, d));
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [priced, open, from, to, view.y, view.m, round]);
+
 
   return (
     <div className="date-range">
       <div className={`field ${departError ? 'has-error' : ''}`}>
         <span className="label" id={`${id}-dl`}>Departure date</span>
         <button type="button" className="date-trigger input" aria-labelledby={`${id}-dl ${id}-dv`} aria-haspopup="dialog" aria-expanded={!!open} onClick={(e) => openFor('depart', e.currentTarget)}>
-          <span id={`${id}-dv`} className={depart ? '' : 'placeholder'}>{depart ? ukDate(depart) : 'DD/MM/YYYY'}</span>
+          <span id={`${id}-dv`} className={depart ? '' : 'placeholder'}>{depart ? mediumDate(depart) : 'Select date'}</span>
           <CalendarIcon />
         </button>
         {departError && <p className="field-error">{departError}</p>}
@@ -114,7 +128,7 @@ export function DateRange({ depart, ret, round, onChange, departError, returnErr
         <div className={`field ${returnError ? 'has-error' : ''}`}>
           <span className="label" id={`${id}-rl`}>Return date</span>
           <button type="button" className="date-trigger input" aria-labelledby={`${id}-rl ${id}-rv`} aria-haspopup="dialog" aria-expanded={!!open} onClick={(e) => openFor('return', e.currentTarget)}>
-            <span id={`${id}-rv`} className={ret ? '' : 'placeholder'}>{ret ? ukDate(ret) : 'DD/MM/YYYY'}</span>
+            <span id={`${id}-rv`} className={ret ? '' : 'placeholder'}>{ret ? mediumDate(ret) : 'Select date'}</span>
             <CalendarIcon />
           </button>
           {returnError && <p className="field-error">{returnError}</p>}
@@ -135,9 +149,14 @@ export function DateRange({ depart, ret, round, onChange, departError, returnErr
             }
           }}
         >
-          <p className="date-panel-hint" aria-live="polite">
-            {open === 'depart' || !round ? 'Select your departure date' : 'Now select your return date'}
-          </p>
+          <div className="date-panel-head">
+            <p className="date-panel-hint" aria-live="polite">
+              {open === 'depart' || !round ? 'Select your departure date' : 'Now select your return date'}
+            </p>
+            <button type="button" className="close-btn" onClick={close}>
+              <span aria-hidden="true">✕</span> Close
+            </button>
+          </div>
           <div className="month-nav">
             <button type="button" className="icon-btn" aria-label="Previous month" disabled={!canPrev} onClick={() => shiftView(-1)}>‹</button>
             <button type="button" className="icon-btn" aria-label="Next month" disabled={!canNext} onClick={() => shiftView(1)}>›</button>
@@ -159,19 +178,21 @@ export function DateRange({ depart, ret, round, onChange, departError, returnErr
                       <tr key={wi}>
                         {week.map((d, di) => {
                           if (!d) return <td key={di} />;
-                          const disabled = d < today || d > last;
+                          const price = prices.get(d);
+                          const noFlights = priced && price === null;
+                          const disabled = d < today || d > last || noFlights;
                           const isStart = d === draftD;
                           const isEnd = d === draftR;
                           const inRange = !!draftD && !!draftR && d > draftD && d < draftR;
                           return (
-                            <td key={di} className={`${isStart || isEnd ? 'sel' : ''} ${inRange ? 'range' : ''} ${isStart && draftR ? 'start' : ''} ${isEnd ? 'end' : ''}`}>
+                            <td key={di} className={`${isStart || isEnd ? 'sel' : ''} ${inRange ? 'range' : ''} ${isStart && draftR ? 'start' : ''} ${isEnd ? 'end' : ''} ${d === today ? 'today' : ''}`}>
                               <button
                                 type="button"
                                 data-date={d}
                                 tabIndex={d === focusDate ? 0 : -1}
                                 disabled={disabled}
                                 aria-pressed={isStart || isEnd}
-                                aria-label={`${fullDate(d)}${d === today ? ', today' : ''}${isStart ? ', departure' : ''}${isEnd ? ', return' : ''}`}
+                                aria-label={`${fullDate(d)}${d === today ? ', today' : ''}${isStart ? ', departure' : ''}${isEnd ? ', return' : ''}${noFlights ? ', no flights' : price ? `, from ${'£' + price} per person, sample` : ''}`}
                                 onClick={() => pick(d)}
                                 onKeyDown={(e) => {
                                   const map: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
@@ -181,7 +202,10 @@ export function DateRange({ depart, ret, round, onChange, departError, returnErr
                                   }
                                 }}
                               >
-                                {Number(d.slice(8))}
+                                <span className="cal-day">{Number(d.slice(8))}</span>
+                                {priced && !(d < today || d > last) && <span className="cal-price">{price ? `£${price}` : '–'}</span>}
+                                {isStart && <span className="cal-tag">{round ? 'Out' : 'Go'}</span>}
+                                {isEnd && <span className="cal-tag">Back</span>}
                               </button>
                             </td>
                           );
@@ -193,6 +217,12 @@ export function DateRange({ depart, ret, round, onChange, departError, returnErr
               </div>
             ))}
           </div>
+          <p className="cal-legend">
+            <span><i className="lg-sel" aria-hidden="true" /> Selected</span>
+            {round && <span><i className="lg-range" aria-hidden="true" /> Trip range</span>}
+            <span><i className="lg-today" aria-hidden="true" /> Today</span>
+            {priced ? <span>£ = lowest sample fare per person{open === 'return' ? ' for the return' : ''}; – = no flights</span> : <span>Choose both airports to see sample prices.</span>}
+          </p>
           <div className="date-actions">
             <button type="button" className="btn btn-ghost" onClick={() => { setDraftD(''); setDraftR(null); setOpen('depart'); }}>
               Clear
@@ -213,6 +243,7 @@ export function DateRange({ depart, ret, round, onChange, departError, returnErr
               Confirm
             </button>
           </div>
+          {confirmDisabled && <p className="muted small confirm-why">{!draftD ? 'Select a departure date to confirm.' : 'Select a return date to confirm, or switch to one way.'}</p>}
         </div>
       )}
     </div>
