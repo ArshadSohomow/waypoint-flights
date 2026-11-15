@@ -156,6 +156,8 @@ export function SkyHero({ compact = false, children }: { compact?: boolean; chil
           </g>
         </svg>
         <div className="mist" />
+        <div className="fog f1" />
+        <div className="fog f2" />
       </div>
       {children && <div className="sky-content wrap">{children}</div>}
     </div>
