@@ -64,7 +64,7 @@ Every header, nav and tab link now goes somewhere real. Find a booking with its 
 ```bash
 npx tsx tests/logic.test.ts          # cost model, warnings, search revalidation, hub data (21 tests)
 python3 tests/serve.py 8787 &        # local server with the same fallback as Cloudflare
-python3 tests/e2e.py http://127.0.0.1:8787   # 30 browser scenarios (Playwright for Python)
+python3 tests/e2e.py http://127.0.0.1:8787   # 31 browser scenarios (Playwright for Python)
 ```
 
 The browser suite follows the spec's test list: return journey to confirmation (desktop and phone), route and passenger changes, extras without double counting, shortlist and compare, date logic, filters to empty and reset, layover timeline, cautious warnings, back/forward/refresh, inline errors, closing every dialog, keyboard use and focus, reduced motion, no overflow at phone/tablet/desktop, routes and 404, one-way self-transfer, and an accessibility audit. v0.3 adds: acknowledging a different return airport, the hub journey (manage, hold a stay and a car, check in, cancel) on desktop and phone, finding a confirmed booking by reference, home tabs and search-button progress, site search, Discover and Help, plus accessibility and overflow checks on every hub page.

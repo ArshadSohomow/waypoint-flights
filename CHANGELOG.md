@@ -22,12 +22,18 @@ Built from the *Waypoint Flights Supplementary Specification* and the annotation
 - Home: real Flights / Stays / Car hire / Check-in tabs (arrow-key navigation) and an "Everything for your trip" strip. Footer site map.
 - Confirmed bookings are saved in this browser, and the confirmation page offers a stay, a car and Manage booking.
 
+**From your research (Project 3 notes and the four Miro boards)**
+- Remembers the airport you last flew from and shows up to three recent searches (places only, never dates or names). From the research: "Airport is pre-selected without needing to manually search".
+- Fares that aren't sold become one quiet line below the available fares instead of greyed-out cards. From the research: "What’s the point in telling me what I can’t have?"
+- Bags aren't asked twice: *Bags & extras* shows the choice you made on the flights page, with a *Change bags* button. From the research: "Doesn't like the two previous pages have the same options to select for the baggage."
+- A slim bar with the route and estimated total stays at the top once you scroll past the trip bar. From the research: "Likes the itinerary on the right side to easily refer to it without having to scroll too far", and the total wasn't noticed at the top.
+
 **Atmosphere**
 - Hub pages share the sky band, with the globe lowered so beacons never sit behind a headline.
 - Decorative fog drifts at dusk and night; a beacon pulse marks the confirming state; empty states carry a small beacon. All motion respects the footer switch and reduced motion.
 
 **Quality**
-- 21 logic tests and 30 browser scenarios: hub flows on desktop and phone, accessibility audits and overflow checks for every new page.
+- 21 logic tests and 31 browser scenarios: hub flows on desktop and phone, accessibility audits and overflow checks for every new page.
 
 ## 0.2.0: transparent booking (branch `feature/transparent-booking-v2`)
 

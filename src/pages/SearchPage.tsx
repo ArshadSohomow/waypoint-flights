@@ -6,9 +6,10 @@ import { PassengerField } from '../components/PassengerField';
 import { TripLookup } from '../components/Hub';
 import { SkyHero } from '../components/Sky';
 import { Search, useBooking, money } from '../lib/booking';
-import { AIRPORTS, airportByCode, DESTINATIONS, SALES, lowestFare, placeAirports, placeByCode } from '../lib/data';
+import { AIRPORTS, airportByCode, DESTINATIONS, SALES, lowestFare, placeAirports, placeByCode, placeShort } from '../lib/data';
 import { addDays, todayISO } from '../lib/dates';
 import { Link, useRouter } from '../lib/router';
+import { forgetSearches, loadRecent, rememberSearch } from '../lib/recent';
 
 type Tab = 'flight' | 'hotel' | 'car' | 'checkin';
 const TABS: { id: Tab; label: string }[] = [
@@ -58,8 +59,14 @@ export function SearchPage() {
       const depart = base.depart && base.depart >= todayISO() ? base.depart : addDays(todayISO(), 21);
       return { ...base, from: qf, to: qt, depart, ret: base.tripType === 'round' ? (base.ret && base.ret >= depart ? base.ret : addDays(depart, 7)) : null };
     }
+    // Returning visitor with nothing in progress: start from the airport they last flew from.
+    if (!booking.search && !base.from) {
+      const last = loadRecent()[0];
+      if (last) return { ...base, from: last.from };
+    }
     return base;
   });
+  const [recent, setRecent] = useState(loadRecent);
   const [errors, setErrors] = useState<Errors>({});
   const [submitted, setSubmitted] = useState(false);
   const errorSummary = React.useRef<HTMLDivElement>(null);
@@ -79,6 +86,7 @@ export function SearchPage() {
       setTimeout(() => errorSummary.current?.focus(), 0);
       return;
     }
+    rememberSearch({ from: s.from, to: s.to, tripType: s.tripType });
     dispatch({ type: 'search', search: { ...s, ret: s.tripType === 'round' ? s.ret : null } });
     navigate('/flights/outbound');
   };
@@ -180,6 +188,32 @@ export function SearchPage() {
                 </p>
               </div>
             </div>
+            {recent.length > 0 && (
+              <div className="recent">
+                <span className="recent-label">Recent searches</span>
+                {recent.map((r) => (
+                  <button
+                    key={`${r.from}-${r.to}`}
+                    type="button"
+                    className="chip-btn"
+                    aria-pressed={s.from === r.from && s.to === r.to}
+                    onClick={() => update({ from: r.from, to: r.to, tripType: r.tripType, ret: r.tripType === 'oneway' ? null : s.ret })}
+                  >
+                    {placeShort(r.from)} → {placeShort(r.to)}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="link-btn small"
+                  onClick={() => {
+                    forgetSearches();
+                    setRecent([]);
+                  }}
+                >
+                  Clear<span className="sr-only"> recent searches</span>
+                </button>
+              </div>
+            )}
           </form>
           )}
           {tab === 'hotel' && <HotelTab />}

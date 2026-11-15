@@ -2453,3 +2453,19 @@ a.step-link:hover .step-name { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) {
   [data-motion] .fog, [data-motion] .beacon-dot, [data-motion] .hum, [data-motion] .search-cta { animation: none !important; }
 }
+
+/* v3.1: research round (Miro affinity diagram, journey map, flowchart, sketches; Project 3 notes) */
+.trip-mini { position: fixed; top: 0; left: 0; right: 0; z-index: 40; background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); box-shadow: 0 4px 14px rgba(28, 27, 25, 0.08); }
+.trip-mini-inner { display: flex; align-items: center; gap: 16px; padding-block: 8px; }
+.trip-mini-inner p { margin: 0; }
+.trip-mini-route { font-weight: 700; }
+.trip-mini-total { margin-left: auto !important; white-space: nowrap; }
+.trip-mini-total strong { font-size: 1.15rem; }
+@media (max-width: 720px) { .trip-mini-inner { gap: 10px; flex-wrap: wrap; } .trip-mini-inner > p:first-child { display: none; } .trip-mini-total { margin-left: 0 !important; } }
+.recent { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 4px; border-top: 1px dashed var(--line); }
+.recent-label { font-size: 0.85rem; font-weight: 600; color: var(--text-2); margin-right: 4px; }
+.chip-btn { min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--line-strong); background: var(--surface); font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
+.chip-btn:hover, .chip-btn[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
+.fare-unavailable-note { grid-column: 1 / -1; margin: 0; font-size: 0.88rem; color: var(--text-2); }
+.bags-chosen { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+.bags-chosen p { margin: 0; }

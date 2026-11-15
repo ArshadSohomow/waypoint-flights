@@ -386,14 +386,8 @@ export function FlightsPage({ leg }: { leg: Leg }) {
                     <div className="fare-cards" id={`fares-${it.id}`}>
                       {CABINS.map((c) => {
                         const o = it.fares[c.id];
-                        if (!o.available)
-                          return (
-                            <div key={c.id} className="fare-card unavailable">
-                              <h3>{c.name}</h3>
-                              <p className="fare-card-price">Not available</p>
-                              <p className="muted">{o.reason}</p>
-                            </div>
-                          );
+                        // Research: "What's the point in telling me what I can't have?" Unavailable fares get one quiet line below, not a card.
+                        if (!o.available) return null;
                         const fe = journeyEstimate(it, c.id, s.pax, booking.bags)!;
                         const sel = isChosen && chosenChoice?.cabin === c.id;
                         return (
@@ -414,6 +408,12 @@ export function FlightsPage({ leg }: { leg: Leg }) {
                           </div>
                         );
                       })}
+                      {CABINS.some((c) => !it.fares[c.id].available) && (
+                        <p className="fare-unavailable-note">
+                          <strong>{CABINS.filter((c) => !it.fares[c.id].available).map((c) => c.name).join(' and ')}</strong> not sold on this journey.{' '}
+                          {[...new Set(CABINS.map((c) => it.fares[c.id]).flatMap((o) => (o.available ? [] : [o.reason.replace(/^Not offered:\s*/, '').replace(/^./, (m) => m.toUpperCase())])))].join(' ')}
+                        </p>
+                      )}
                     </div>
                   )}
                   {isChosen && (

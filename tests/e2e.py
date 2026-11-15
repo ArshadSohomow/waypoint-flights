@@ -183,7 +183,8 @@ def extras(page):
     assert t1 - t0 == 9 * 2 * 2, f'Fast Track: 2 travellers × 2 journeys × £9, got {t1 - t0}'
     page.get_by_role('button', name=re.compile('Added.*Fast Track')).click()
     assert total() == t0
-    page.get_by_role('radio', name='2').first.check()
+    page.get_by_role('button', name='Change bags').click()
+    page.get_by_role('radio', name='2 checked bags').check()
     t2 = total()
     assert t2 - t0 == 2 * 2 * 30, f'second bag: 2 travellers × 2 journeys × £30, got {t2 - t0}'
     assert money(page.locator('.trip-total-amount').inner_text()) == t2, 'trip bar and breakdown agree'
@@ -560,6 +561,41 @@ def hub_widths(page):
         assert sw <= w + 1, f'{path} overflows: {sw} > {w}'
 
 
+
+# 25. Research round: remembered airport, one-line unavailable fares, bags not asked twice, sticky total
+def research_round(page):
+    page.goto(BASE + '/')
+    page.evaluate('localStorage.clear(); sessionStorage.clear()')
+    page.reload()
+    pick_airport(page, 'Departs from', 'Amster', 'AMS')
+    pick_airport(page, 'Arrives at', 'barc', 'BCN')
+    pick_dates(page)
+    page.get_by_role('button', name='Search flights').click()
+    expect(page).to_have_url(re.compile('/flights/outbound'))
+    page.evaluate('sessionStorage.clear()')
+    page.goto(BASE + '/')
+    expect(page.get_by_role('combobox', name='Departs from')).to_have_value(re.compile('AMS'))
+    expect(page.locator('.recent')).to_contain_text('Amsterdam')
+    seed(page)
+    card = page.locator('.flight').filter(has_text='Self-transfer').first
+    card.get_by_role('button', name=re.compile('Choose fare')).click()
+    expect(card.locator('.fare-card')).to_have_count(1)
+    expect(card.locator('.fare-unavailable-note')).to_contain_text('not sold on this journey')
+    page.evaluate('window.scrollTo(0, 1500)')
+    expect(page.locator('.trip-mini')).to_be_visible()
+    page.evaluate('window.scrollTo(0, 0)')
+    expect(page.locator('.trip-mini')).to_have_count(0)
+    seed(page, {**SEED, 'search': {**SEED['search'], 'tripType': 'oneway', 'ret': None}})
+    choose(page, card_filter='Self-transfer')
+    page.goto(BASE + '/summary')
+    expect(page.locator('.bags-chosen')).to_contain_text('1 checked bag')
+    expect(page.locator('input[name=bags-summary]')).to_have_count(0)
+    page.get_by_role('button', name='Change bags').click()
+    page.get_by_label('No checked bag').check()
+    expect(page.locator('.bags-chosen')).to_contain_text('no checked bag')
+
+
+
 check('1  Return journey to review and demo confirmation', full_journey)
 check('2  Changing origin resets stale selections', change_origin)
 check('3  Passenger count updates price basis and totals', pax_change)
@@ -590,6 +626,7 @@ check('22 Home tabs, CTA progress, site search, Discover, Support', hub_nav)
 check('23 Accessibility checks on hub pages', a11y_hub)
 check('24 Hub pages: no overflow on phone', hub_widths, PHONE)
 check('24 Hub pages: no overflow on tablet', hub_widths, TABLET)
+check('25 Research round: remembered airport, fares, bags, sticky total', research_round)
 
 w = max(len(r[0]) for r in results)
 for n, s, e in results:

@@ -233,12 +233,48 @@ function TripBar() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   useEffect(() => setOpen(false), [path]);
+  const barRef = useRef<HTMLDivElement>(null);
+  const [away, setAway] = useState(false);
+  // Research: keep the itinerary and total in reach without scrolling back up.
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => setAway(!e.isIntersecting && e.boundingClientRect.top < 0), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [path]);
   const s = booking.search;
   if (!s) return null;
   const n = totalPax(s.pax);
   const { total, lines } = costs(booking);
   return (
-    <div className="trip-bar">
+    <div className="trip-bar" ref={barRef}>
+      {away && (
+        <div className="trip-mini" role="region" aria-label="Trip total">
+          <div className="wrap trip-mini-inner">
+            <p>
+              <span className="trip-mini-route">
+                {placeShort(s.from)} {s.tripType === 'round' ? '⇄' : '→'} {placeShort(s.to)}
+              </span>
+              <span className="muted"> · {n} traveller{n === 1 ? '' : 's'}</span>
+            </p>
+            <p className="trip-mini-total">
+              <span className="muted small">Estimated total </span>
+              <strong>{lines.length ? money(total) : 'Choose a flight'}</strong>
+            </p>
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => {
+                window.scrollTo({ top: 0 });
+                setOpen(true);
+              }}
+            >
+              Trip summary
+            </button>
+          </div>
+        </div>
+      )}
       <div className="wrap trip-bar-inner">
         <div className="trip-bar-main">
           <p className="trip-route">
