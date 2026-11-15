@@ -13,9 +13,10 @@ type Props = {
   returnError?: string;
   from?: string;
   to?: string;
+  done?: { depart: boolean; ret: boolean };
 };
 
-export function DateRange({ depart, ret, round, onChange, departError, returnError, from, to }: Props) {
+export function DateRange({ depart, ret, round, onChange, departError, returnError, from, to, done }: Props) {
   const [open, setOpen] = useState<null | 'depart' | 'return'>(null);
   const [draftD, setDraftD] = useState(depart);
   const [draftR, setDraftR] = useState<string | null>(ret);
@@ -116,7 +117,7 @@ export function DateRange({ depart, ret, round, onChange, departError, returnErr
 
   return (
     <div className="date-range">
-      <div className={`field ${departError ? 'has-error' : ''}`}>
+      <div className={`field ${departError ? 'has-error' : done?.depart ? 'is-done' : ''}`}>
         <span className="label" id={`${id}-dl`}>Departure date</span>
         <button type="button" className="date-trigger input" aria-labelledby={`${id}-dl ${id}-dv`} aria-haspopup="dialog" aria-expanded={!!open} onClick={(e) => openFor('depart', e.currentTarget)}>
           <span id={`${id}-dv`} className={depart ? '' : 'placeholder'}>{depart ? mediumDate(depart) : 'Select date'}</span>
@@ -125,7 +126,7 @@ export function DateRange({ depart, ret, round, onChange, departError, returnErr
         {departError && <p className="field-error">{departError}</p>}
       </div>
       {round && (
-        <div className={`field ${returnError ? 'has-error' : ''}`}>
+        <div className={`field ${returnError ? 'has-error' : done?.ret ? 'is-done' : ''}`}>
           <span className="label" id={`${id}-rl`}>Return date</span>
           <button type="button" className="date-trigger input" aria-labelledby={`${id}-rl ${id}-rv`} aria-haspopup="dialog" aria-expanded={!!open} onClick={(e) => openFor('return', e.currentTarget)}>
             <span id={`${id}-rv`} className={ret ? '' : 'placeholder'}>{ret ? mediumDate(ret) : 'Select date'}</span>

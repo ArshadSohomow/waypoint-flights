@@ -128,7 +128,13 @@ export function PaymentPage() {
               </label>
             </div>
             <button type="button" className="btn btn-primary btn-lg btn-block" onClick={confirm} disabled={busy} aria-busy={busy}>
-              {busy ? 'Confirming…' : `Confirm demo booking (${money(total)})`}
+              {busy ? (
+                <span className="beacon-loading">
+                  <span className="beacon-dot" aria-hidden="true" /> Confirming…
+                </span>
+              ) : (
+                `Confirm demo booking (${money(total)})`
+              )}
             </button>
             <button type="button" className="btn btn-ghost btn-block" onClick={() => navigate('/passengers')} disabled={busy}>
               Back to passenger details

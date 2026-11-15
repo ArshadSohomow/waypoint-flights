@@ -8,7 +8,7 @@ const fieldLabel = (code: string) => {
 
 // ARIA 1.2 combobox: type to filter, arrow keys to move, Enter to pick, Escape to close.
 // Lists city "all airports" options above that city's individual airports.
-export function AirportField({ label, value, onChange, exclude, error }: { label: string; value: string; onChange: (code: string) => void; exclude?: string; error?: string }) {
+export function AirportField({ label, value, onChange, exclude, error, done }: { label: string; value: string; onChange: (code: string) => void; exclude?: string; error?: string; done?: boolean }) {
   const id = useId();
   const listId = `${id}-list`;
   const errId = `${id}-err`;
@@ -38,7 +38,7 @@ export function AirportField({ label, value, onChange, exclude, error }: { label
   };
 
   return (
-    <div className={`field ${error ? 'has-error' : ''}`}>
+    <div className={`field ${error ? 'has-error' : done ? 'is-done' : ''}`}>
       <label htmlFor={id}>{label}</label>
       <div className="combo">
         <input

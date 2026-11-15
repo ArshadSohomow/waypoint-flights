@@ -8,7 +8,10 @@ import { EXTRA_BAG_PRICE, EXTRAS, FRONT_ROW_PRICE, milesFor, offerOf, SERVICES }
 import { bagsText } from '../components/FlightBits';
 import { Link, Redirect, useRouter } from '../lib/router';
 
+const BAG_WORDS = ['no checked bag', '1 checked bag', '2 checked bags'];
+
 export function SummaryPage() {
+  const [changeBags, setChangeBags] = React.useState(false);
   const { booking, dispatch } = useBooking();
   const { navigate } = useRouter();
   const [service, setService] = useState<string | null>(null);
@@ -35,18 +38,28 @@ export function SummaryPage() {
           <div className="summary-main">
             <section className="panel" aria-labelledby="bags-h">
               <h2 id="bags-h">Checked bags</h2>
-              <p className="muted">You set this on the flights page. Change it here if your plans have changed. It applies to every traveller with a seat, on each journey.</p>
-              <fieldset className="bags-pick">
-                <legend>Checked bags per traveller</legend>
-                <div className="seg">
-                  {[0, 1, 2].map((b) => (
-                    <label key={b} className={booking.bags === b ? 'on' : ''}>
-                      <input type="radio" name="bags-summary" value={b} checked={booking.bags === b} onChange={() => dispatch({ type: 'bags', bags: b })} />
-                      {b}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+              {/* Research: don't ask the same question twice. Show the choice from the flights page; change only if asked. */}
+              <div className="bags-chosen">
+                <p>
+                  You chose <strong>{BAG_WORDS[booking.bags]}</strong> per traveller on the flights page.
+                </p>
+                <button type="button" className="btn btn-small btn-outline" aria-expanded={changeBags} aria-controls="bags-change" onClick={() => setChangeBags((v) => !v)}>
+                  {changeBags ? 'Done' : 'Change bags'}
+                </button>
+              </div>
+              {changeBags && (
+                <fieldset className="bags-pick" id="bags-change">
+                  <legend>Checked bags per traveller</legend>
+                  <div className="seg">
+                    {[0, 1, 2].map((b) => (
+                      <label key={b} className={booking.bags === b ? 'on' : ''}>
+                        <input type="radio" name="bags-summary" value={b} checked={booking.bags === b} onChange={() => dispatch({ type: 'bags', bags: b })} />
+                        {BAG_WORDS[b].replace(/^./, (m) => m.toUpperCase())}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
               <ul className="plain bag-lines">
                 {ps.map((x) => {
                   const o = offerOf(x.it, x.cabin);

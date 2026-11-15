@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 // Native <dialog> gives focus trapping, Escape to close and inert background for free.
 export function Dialog({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean }) {
@@ -32,28 +32,3 @@ export function Dialog({ open, onClose, title, children, footer, wide }: { open:
   );
 }
 
-// One shared "coming soon" message for every feature the demo deliberately leaves out.
-const ComingSoonCtx = createContext<(feature: string) => void>(() => {});
-export const useComingSoon = () => useContext(ComingSoonCtx);
-
-export function ComingSoonProvider({ children }: { children: React.ReactNode }) {
-  const [feature, setFeature] = useState<string | null>(null);
-  const open = useCallback((f: string) => setFeature(f), []);
-  return (
-    <ComingSoonCtx.Provider value={open}>
-      {children}
-      <Dialog
-        open={feature !== null}
-        onClose={() => setFeature(null)}
-        title={`${feature ?? ''} is coming soon`}
-        footer={
-          <button type="button" className="btn btn-primary" onClick={() => setFeature(null)}>
-            OK
-          </button>
-        }
-      >
-        <p>This part of the site isn't in the demo yet. Flight booking works from start to finish.</p>
-      </Dialog>
-    </ComingSoonCtx.Provider>
-  );
-}

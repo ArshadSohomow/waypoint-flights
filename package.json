@@ -1,6 +1,6 @@
 {
   "name": "waypoint-flights",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Waypoint: demo flight booking site built from the Figma prototype",
   "type": "module",

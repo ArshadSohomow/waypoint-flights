@@ -31,7 +31,10 @@ A pre-built `dist/` is included, so `npx wrangler deploy` works without `npm ins
 
 | Part | Where | Notes |
 | --- | --- | --- |
-| Pages | `src/pages/` | Search, Flights (outbound/return), Compare, Review flights, Seats, Bags & extras (`/summary`), Passengers, Review & confirm (`/payment`), Confirmation, 404 |
+| Booking pages | `src/pages/` | Search, Flights (outbound/return), Compare, Review flights, Seats, Bags & extras (`/summary`), Passengers, Review & confirm (`/payment`), Confirmation, 404 |
+| Hub pages | `src/pages/TripPages.tsx`, `StayPages.tsx`, `ExplorePages.tsx` | Manage booking (`/manage`), Online check-in (`/check-in`), Your trips (`/account`), Stays (`/hotels`), Car hire (`/cars`), Discover (`/discover`), Help (`/support`), site Search (`/search`) |
+| Saved trips | `src/lib/trips.ts` | Confirmed demo bookings kept in this browser's `localStorage` (no contact details, no dates of birth, never payment data). Example booking: **WPDEMO / Traveller** |
+| Hub sample data | `src/lib/hub.ts` | Invented hotels and car suppliers, destination guides, help answers and the site-search index. Unknown terms (taxes, deposits, insurance) are said to be not supplied |
 | Components | `src/components/` | Header, 5-step stepper (completed steps are links), trip bar with expandable trip summary, journey summary and timeline, warnings, cost breakdown, flexible-dates grid, airport combobox, date picker with sample prices, passenger counter, dialogs, sky hero |
 | Sample data | `src/lib/data.ts` | Typed itineraries with legs, layovers, self-transfer, baggage and fare rules, generated deterministically and labelled as sample. **Replace `searchItineraries`, `findItinerary` and `lowestFare` with API calls for real bookings**; the UI depends only on the types. |
 | Costs | `src/lib/costs.ts` | The single calculation used everywhere: per person vs party, bags, seats, extras, taxes and costs not included (shown as unknown, never invented) |
@@ -52,23 +55,23 @@ Stack: React 19 + TypeScript, bundled with esbuild. No routing or UI library.
 - Seats are chosen for the first flight of a journey; connecting and self-transfer seats are allocated at check-in.
 - Times are local to each airport. Sky colours never represent real weather.
 
-## Coming soon (shown as a message, by agreement)
+## Hub features (v0.3)
 
-Login, Language, site Search, Manage, Discover, Support, and the Hotel, Car and Check-in tabs.
+Every header, nav and tab link now goes somewhere real. Find a booking with its reference and a last name (no passwords anywhere). Hold sample stays and cars against a trip, check in for sample boarding passes marked *not valid for travel*, browse destination ideas with sample fares, and search help or the whole site. Language shows English (UK) with other languages listed as not yet translated; prices stay in GBP.
 
 ## Tests
 
 ```bash
-npx tsx tests/logic.test.ts          # cost model, warnings, search revalidation (17 tests)
+npx tsx tests/logic.test.ts          # cost model, warnings, search revalidation, hub data (21 tests)
 python3 tests/serve.py 8787 &        # local server with the same fallback as Cloudflare
-python3 tests/e2e.py http://127.0.0.1:8787   # 22 browser scenarios (Playwright for Python)
+python3 tests/e2e.py http://127.0.0.1:8787   # 31 browser scenarios (Playwright for Python)
 ```
 
-The browser suite follows the spec's test list: return journey to confirmation (desktop and phone), route and passenger changes, extras without double counting, shortlist and compare, date logic, filters to empty and reset, layover timeline, cautious warnings, back/forward/refresh, inline errors, closing every dialog, keyboard use and focus, reduced motion, no overflow at phone/tablet/desktop, routes and 404, one-way self-transfer, and an accessibility audit.
+The browser suite follows the spec's test list: return journey to confirmation (desktop and phone), route and passenger changes, extras without double counting, shortlist and compare, date logic, filters to empty and reset, layover timeline, cautious warnings, back/forward/refresh, inline errors, closing every dialog, keyboard use and focus, reduced motion, no overflow at phone/tablet/desktop, routes and 404, one-way self-transfer, and an accessibility audit. v0.3 adds: acknowledging a different return airport, the hub journey (manage, hold a stay and a car, check in, cancel) on desktop and phone, finding a confirmed booking by reference, home tabs and search-button progress, site search, Discover and Help, plus accessibility and overflow checks on every hub page.
 
 ## Known limitations
 
 - Sample data only. No live fares, bookings, payments or tickets; no card details are ever collected.
-- No accounts, emails or saved bookings; a booking lives in the browser tab.
+- No accounts or emails. Confirmed demo bookings are saved only in the browser they were made in.
 - `npm run typecheck` needs `npm install`. In the environment used to build this, React's type packages couldn't be downloaded, so the code was type-checked strictly with React's own types stubbed.
 - `robots.txt` and a `noindex` tag keep the demo out of search engines; remove both before a real launch.

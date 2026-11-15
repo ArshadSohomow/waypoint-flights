@@ -1,16 +1,21 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
-// A small History-API router. The site has ten fixed routes, so a full routing
+// A small History-API router. The site has a fixed set of routes, so a full routing
 // library would add weight without adding anything we use.
 
-type RouterValue = { path: string; navigate: (to: string, opts?: { replace?: boolean }) => void };
-const RouterContext = createContext<RouterValue>({ path: '/', navigate: () => {} });
+type RouterValue = { path: string; query: URLSearchParams; navigate: (to: string, opts?: { replace?: boolean }) => void };
+const RouterContext = createContext<RouterValue>({ path: '/', query: new URLSearchParams(), navigate: () => {} });
 
 export function RouterProvider({ children }: { children: React.ReactNode }) {
   const [path, setPath] = useState(() => window.location.pathname);
+  const [query, setQuery] = useState(() => window.location.search);
+  const [navId, setNavId] = useState(0); // bumps on every navigation, so same-page hash links still scroll
 
   useEffect(() => {
-    const onPop = () => setPath(window.location.pathname);
+    const onPop = () => {
+      setPath(window.location.pathname);
+      setQuery(window.location.search);
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -18,7 +23,10 @@ export function RouterProvider({ children }: { children: React.ReactNode }) {
   const navigate = useCallback((to: string, opts?: { replace?: boolean }) => {
     if (opts?.replace) window.history.replaceState(null, '', to);
     else window.history.pushState(null, '', to);
-    setPath(new URL(to, window.location.origin).pathname);
+    const u = new URL(to, window.location.origin);
+    setPath(u.pathname);
+    setQuery(u.search);
+    setNavId((n) => n + 1);
   }, []);
 
   // New page: scroll to top and move focus to the main heading so screen-reader
@@ -29,15 +37,25 @@ export function RouterProvider({ children }: { children: React.ReactNode }) {
       first.current = false;
       return;
     }
+    const hash = window.location.hash.slice(1);
+    const target = hash ? document.getElementById(decodeURIComponent(hash)) : null;
+    if (target) {
+      target.scrollIntoView();
+      target.setAttribute('tabindex', '-1');
+      target.focus({ preventScroll: true });
+      return;
+    }
     window.scrollTo(0, 0);
-    const h = document.querySelector<HTMLElement>('main h1');
+    const h = document.querySelector<HTMLElement>('main h1') ?? document.querySelector<HTMLElement>('h1');
     if (h) {
       h.setAttribute('tabindex', '-1');
       h.focus({ preventScroll: true });
     }
-  }, [path]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, navId]);
 
-  return <RouterContext.Provider value={{ path, navigate }}>{children}</RouterContext.Provider>;
+  const params = React.useMemo(() => new URLSearchParams(query), [query]);
+  return <RouterContext.Provider value={{ path, query: params, navigate }}>{children}</RouterContext.Provider>;
 }
 
 export const useRouter = () => useContext(RouterContext);
