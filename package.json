@@ -1,6 +1,6 @@
 {
   "name": "waypoint-flights",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Waypoint: demo flight booking site built from the Figma prototype",
   "type": "module",
@@ -9,6 +9,7 @@
     "dev": "node build.mjs --dev && npx wrangler dev",
     "typecheck": "tsc --noEmit",
     "test": "python3 tests/e2e.py",
+    "test:logic": "npx tsx tests/logic.test.ts",
     "deploy": "node build.mjs && npx wrangler deploy"
   },
   "dependencies": {

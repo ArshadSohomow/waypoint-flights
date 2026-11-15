@@ -1,24 +1,35 @@
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
-import { Cabin, ExtraId, findFlight, Flight, FRONT_ROW_PRICE, INFANT_FARE, isFrontRow, EXTRAS } from './data';
+import { Cabin, ExtraId, findItinerary, Itinerary } from './data';
+import { JourneyPick, Pax, seatedCount, totalPax, tripCosts, money } from './costs';
 
-export type Pax = { adults: number; youngAdults: number; children: number; infants: number };
+export { seatedCount, totalPax, money };
+export type { Pax };
+
 export type Search = { from: string; to: string; depart: string; ret: string | null; tripType: 'round' | 'oneway'; pax: Pax };
-export type Choice = { flightId: string; cabin: Cabin };
+export type Choice = { itineraryId: string; cabin: Cabin };
 export type Leg = 'outbound' | 'return';
 export type PassengerType = 'adult' | 'youngAdult' | 'child' | 'infant';
 export type Passenger = { type: PassengerType; title: string; firstName: string; lastName: string; dob: string };
 export type Contact = { email: string; phone: string };
 export type Confirmation = { ref: string; total: number; at: string };
+export type Sort = 'recommended' | 'price' | 'depart' | 'duration' | 'easiest';
+export type Filters = { stops: 'any' | 'direct' | 'max1'; times: ('morning' | 'afternoon' | 'evening')[]; hideSelfTransfer: boolean; sort: Sort };
+export const DEFAULT_FILTERS: Filters = { stops: 'any', times: ['morning', 'afternoon', 'evening'], hideSelfTransfer: false, sort: 'recommended' };
+export const MAX_SHORTLIST = 3;
 
 export type Booking = {
   search: Search | null;
   outbound: Choice | null;
   ret: Choice | null;
   seats: { outbound: string[]; return: string[] };
+  bags: number; // checked bags wanted per traveller, applies to both journeys
   extras: Record<ExtraId, boolean>;
+  shortlist: { outbound: string[]; return: string[] };
+  filters: { outbound: Filters; return: Filters };
   passengers: Passenger[];
   contact: Contact;
   confirmation: Confirmation | null;
+  notice: string | null; // one-off message explaining what changed after an edit
 };
 
 const empty: Booking = {
@@ -26,10 +37,14 @@ const empty: Booking = {
   outbound: null,
   ret: null,
   seats: { outbound: [], return: [] },
-  extras: { fasttrack: false, lounge: false, baggage: false },
+  bags: 1,
+  extras: { fasttrack: false, lounge: false },
+  shortlist: { outbound: [], return: [] },
+  filters: { outbound: DEFAULT_FILTERS, return: DEFAULT_FILTERS },
   passengers: [],
   contact: { email: '', phone: '' },
   confirmation: null,
+  notice: null,
 };
 
 type Action =
@@ -37,65 +52,122 @@ type Action =
   | { type: 'date'; leg: Leg; date: string }
   | { type: 'choose'; leg: Leg; choice: Choice }
   | { type: 'seat'; leg: Leg; index: number; seat: string | null }
+  | { type: 'bags'; bags: number }
   | { type: 'extra'; id: ExtraId; on: boolean }
+  | { type: 'shortlist'; leg: Leg; id: string }
+  | { type: 'filters'; leg: Leg; filters: Filters }
   | { type: 'passengers'; passengers: Passenger[]; contact: Contact }
   | { type: 'confirm'; confirmation: Confirmation }
+  | { type: 'clearNotice' }
   | { type: 'reset' };
 
-export const seatedCount = (p: Pax) => p.adults + p.youngAdults + p.children;
-export const totalPax = (p: Pax) => seatedCount(p) + p.infants;
+export function passengerTypes(p: Pax): PassengerType[] {
+  return [...Array(p.adults).fill('adult'), ...Array(p.youngAdults).fill('youngAdult'), ...Array(p.children).fill('child'), ...Array(p.infants).fill('infant')];
+}
+
+/** Apply an edited search, keeping everything that is still valid and saying what was cleared. */
+export function applySearch(state: Booking, s: Search): Booking {
+  const prev = state.search;
+  if (!prev) return { ...empty, bags: state.bags, search: s };
+  const routeChanged = prev.from !== s.from || prev.to !== s.to;
+  const outDateChanged = prev.depart !== s.depart;
+  const retChanged = prev.ret !== s.ret || prev.tripType !== s.tripType;
+  const seatedChanged = seatedCount(prev.pax) !== seatedCount(s.pax);
+  const typesChanged = passengerTypes(prev.pax).join() !== passengerTypes(s.pax).join();
+  const next: Booking = { ...state, search: s, confirmation: null, notice: null };
+  const cleared: string[] = [];
+  if (routeChanged || outDateChanged) {
+    if (state.outbound) cleared.push('outbound flight');
+    next.outbound = null;
+    next.seats = { ...next.seats, outbound: [] };
+    next.shortlist = { ...next.shortlist, outbound: [] };
+  }
+  if (routeChanged || retChanged || s.tripType === 'oneway') {
+    if (state.ret) cleared.push('return flight');
+    next.ret = null;
+    next.seats = { ...next.seats, return: [] };
+    next.shortlist = { ...next.shortlist, return: [] };
+  }
+  if (seatedChanged && (next.seats.outbound.some(Boolean) || next.seats.return.some(Boolean))) {
+    cleared.push('seats');
+    next.seats = { outbound: [], return: [] };
+  }
+  if (typesChanged && state.passengers.length) {
+    cleared.push('passenger details');
+    next.passengers = [];
+  }
+  if (cleared.length) {
+    const kept = !routeChanged && !outDateChanged && state.outbound ? ' Your other choices are kept.' : '';
+    next.notice = `Search updated. Because of your changes we cleared your ${cleared.join(', ').replace(/, ([^,]*)$/, ' and $1')}.${kept}`;
+  }
+  return next;
+}
 
 function reducer(state: Booking, a: Action): Booking {
   switch (a.type) {
-    case 'search': {
-      const same =
-        state.search &&
-        state.search.from === a.search.from &&
-        state.search.to === a.search.to &&
-        state.search.depart === a.search.depart &&
-        state.search.ret === a.search.ret &&
-        JSON.stringify(state.search.pax) === JSON.stringify(a.search.pax);
-      // A changed search invalidates everything chosen after it.
-      return same ? { ...state, search: a.search, confirmation: null } : { ...empty, search: a.search };
-    }
+    case 'search':
+      return applySearch(state, a.search);
     case 'date': {
       if (!state.search) return state;
-      if (a.leg === 'outbound')
-        return { ...state, search: { ...state.search, depart: a.date }, outbound: null, seats: { ...state.seats, outbound: [] }, confirmation: null };
-      return { ...state, search: { ...state.search, ret: a.date }, ret: null, seats: { ...state.seats, return: [] }, confirmation: null };
+      const s = a.leg === 'outbound' ? { ...state.search, depart: a.date } : { ...state.search, ret: a.date };
+      const choiceKey = a.leg === 'outbound' ? 'outbound' : 'ret';
+      return {
+        ...state,
+        search: s,
+        [choiceKey]: null,
+        seats: { ...state.seats, [a.leg]: [] },
+        shortlist: { ...state.shortlist, [a.leg]: [] },
+        confirmation: null,
+        notice: null,
+      };
     }
     case 'choose': {
-      if (a.leg === 'outbound') {
-        const changed = state.outbound?.flightId !== a.choice.flightId;
-        return { ...state, outbound: a.choice, seats: changed ? { ...state.seats, outbound: [] } : state.seats, confirmation: null };
-      }
-      const changed = state.ret?.flightId !== a.choice.flightId;
-      return { ...state, ret: a.choice, seats: changed ? { ...state.seats, return: [] } : state.seats, confirmation: null };
+      const key = a.leg === 'outbound' ? 'outbound' : 'ret';
+      const prev = state[key];
+      const changed = prev?.itineraryId !== a.choice.itineraryId;
+      return { ...state, [key]: a.choice, seats: changed ? { ...state.seats, [a.leg]: [] } : state.seats, confirmation: null };
     }
     case 'seat': {
       const list = [...state.seats[a.leg]];
-      if (a.seat === null) list[a.index] = '';
-      else list[a.index] = a.seat;
+      list[a.index] = a.seat ?? '';
       return { ...state, seats: { ...state.seats, [a.leg]: list } };
     }
+    case 'bags':
+      return { ...state, bags: Math.max(0, Math.min(2, a.bags)) };
     case 'extra':
       return { ...state, extras: { ...state.extras, [a.id]: a.on } };
+    case 'shortlist': {
+      const cur = state.shortlist[a.leg];
+      const next = cur.includes(a.id) ? cur.filter((x) => x !== a.id) : cur.length >= MAX_SHORTLIST ? cur : [...cur, a.id];
+      return { ...state, shortlist: { ...state.shortlist, [a.leg]: next } };
+    }
+    case 'filters':
+      return { ...state, filters: { ...state.filters, [a.leg]: a.filters } };
     case 'passengers':
       return { ...state, passengers: a.passengers, contact: a.contact };
     case 'confirm':
       return { ...state, confirmation: a.confirmation };
+    case 'clearNotice':
+      return { ...state, notice: null };
     case 'reset':
       return empty;
   }
 }
 
-const KEY = 'waypoint-booking-v1';
+const KEY = 'waypoint-booking-v2';
 function load(): Booking {
   try {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return empty;
-    const b = JSON.parse(raw) as Booking;
-    return { ...empty, ...b, seats: { ...empty.seats, ...b.seats }, extras: { ...empty.extras, ...b.extras } };
+    const b = JSON.parse(raw) as Partial<Booking>;
+    return {
+      ...empty,
+      ...b,
+      seats: { ...empty.seats, ...b.seats },
+      extras: { ...empty.extras, ...b.extras },
+      shortlist: { ...empty.shortlist, ...b.shortlist },
+      filters: { outbound: { ...DEFAULT_FILTERS, ...b.filters?.outbound }, return: { ...DEFAULT_FILTERS, ...b.filters?.return } },
+    };
   } catch {
     return empty;
   }
@@ -117,48 +189,24 @@ export function BookingProvider({ children }: { children: React.ReactNode }) {
 
 export const useBooking = () => useContext(Ctx);
 
-export function chosenFlight(c: Choice | null): Flight | undefined {
-  return c ? findFlight(c.flightId) : undefined;
+export function chosen(c: Choice | null): Itinerary | undefined {
+  return c ? findItinerary(c.itineraryId) : undefined;
 }
 
-export type LineItem = { label: string; amount: number };
-
-/** Price breakdown for everything chosen so far. */
-export function priceLines(b: Booking): LineItem[] {
-  if (!b.search) return [];
-  const seated = seatedCount(b.search.pax);
-  const infants = b.search.pax.infants;
-  const legs: { leg: Leg; choice: Choice | null }[] = [
-    { leg: 'outbound', choice: b.outbound },
-    { leg: 'return', choice: b.search.tripType === 'round' ? b.ret : null },
-  ];
-  const lines: LineItem[] = [];
-  for (const { leg, choice } of legs) {
-    const f = chosenFlight(choice);
-    if (!f || !choice) continue;
-    const name = leg === 'outbound' ? 'Outbound' : 'Return';
-    lines.push({ label: `${name} fare × ${seated}`, amount: f.fares[choice.cabin] * seated });
-    if (infants) lines.push({ label: `${name} infant fare × ${infants}`, amount: INFANT_FARE * infants });
-    const front = b.seats[leg].filter((s) => s && isFrontRow(s)).length;
-    if (front && choice.cabin === 'economy') lines.push({ label: `${name} Front Row seats × ${front}`, amount: FRONT_ROW_PRICE * front });
-  }
-  for (const e of EXTRAS) {
-    const n = extraFlights(b, e.id);
-    if (b.extras[e.id] && n) lines.push({ label: `${e.name} × ${seated * n}`, amount: e.price * seated * n });
-  }
-  return lines;
+/** The journeys picked so far, in order, for costs and summaries. */
+export function picks(b: Booking): JourneyPick[] {
+  const out: JourneyPick[] = [];
+  const o = chosen(b.outbound);
+  if (o && b.outbound) out.push({ label: 'Outbound', it: o, cabin: b.outbound.cabin, seats: b.seats.outbound });
+  const r = b.search?.tripType === 'round' ? chosen(b.ret) : undefined;
+  if (r && b.ret) out.push({ label: 'Return', it: r, cabin: b.ret.cabin, seats: b.seats.return });
+  return out;
 }
 
-/** How many chosen flights an extra applies to: Fast Track and Lounge come free with Business and Premium. */
-export function extraFlights(b: Booking, id: ExtraId): number {
-  if (!b.search) return 0;
-  const choices = [b.outbound, b.search.tripType === 'round' ? b.ret : null].filter((c): c is Choice => !!c);
-  return choices.filter((c) => id === 'baggage' || c.cabin === 'economy').length;
+export function costs(b: Booking) {
+  if (!b.search) return { lines: [], total: 0 };
+  return tripCosts(picks(b), b.search.pax, b.bags, b.extras);
 }
-
-export const priceTotal = (b: Booking) => priceLines(b).reduce((s, l) => s + l.amount, 0);
-
-export const money = (n: number) => `£${n.toLocaleString('en-GB')}`;
 
 /** Labels for each seated passenger, in order. */
 export function seatedLabels(p: Pax): string[] {
@@ -169,27 +217,21 @@ export function seatedLabels(p: Pax): string[] {
   return out;
 }
 
-export function passengerTypes(p: Pax): PassengerType[] {
-  return [
-    ...Array(p.adults).fill('adult'),
-    ...Array(p.youngAdults).fill('youngAdult'),
-    ...Array(p.children).fill('child'),
-    ...Array(p.infants).fill('infant'),
-  ];
-}
+/** Seats can only be chosen when the journey is on one ticket; self-transfer seats are given at check-in. */
+export const seatsSelectable = (it: Itinerary | undefined) => !!it && !it.selfTransfer;
 
-/** Which step of the journey the booking has reached; pages use it to send people back if they skip ahead. */
+/** How far the booking has got; pages use it to send people back if they skip ahead. */
 export function progress(b: Booking) {
   const s = b.search;
   const needsReturn = s?.tripType === 'round';
   const seated = s ? seatedCount(s.pax) : 0;
-  const seatsDone = (leg: Leg) => b.seats[leg].filter(Boolean).length === seated;
+  const seatsDone = (leg: Leg, c: Choice | null) => !seatsSelectable(chosen(c)) || b.seats[leg].filter(Boolean).length === seated;
   return {
     searched: !!s,
     outbound: !!b.outbound,
     flights: !!b.outbound && (!needsReturn || !!b.ret),
-    seats: seatsDone('outbound') && (!needsReturn || seatsDone('return')),
-    passengers: b.passengers.length === (s ? seated + s.pax.infants : 0) && !!b.contact.email,
-    paid: !!b.confirmation,
+    seats: !!b.outbound && seatsDone('outbound', b.outbound) && (!needsReturn || (!!b.ret && seatsDone('return', b.ret))),
+    passengers: b.passengers.length === (s ? totalPax(s.pax) : 0) && !!b.contact.email,
+    confirmed: !!b.confirmation,
   };
 }

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { BookingHeader, SiteFooter } from '../components/Chrome';
 import { Dialog } from '../components/Dialog';
-import { RouteHeading, Times } from '../components/FlightBits';
-import { chosenFlight, Leg, money, progress, seatedCount, seatedLabels, useBooking } from '../lib/booking';
+import { JourneySummary, RouteHeading } from '../components/FlightBits';
+import { chosen, Leg, seatsSelectable, money, progress, seatedLabels, useBooking } from '../lib/booking';
 import { FRONT_ROW_PRICE, isFrontRow, SEAT_COLS, SEAT_ROWS, seatPosition, SERVICES, unavailableSeats } from '../lib/data';
-import { fullDate, shortDate } from '../lib/dates';
+import { addDays, fullDate, shortDate } from '../lib/dates';
 import { Redirect, useRouter } from '../lib/router';
 
 export function SeatsPage({ leg }: { leg: Leg }) {
@@ -22,12 +22,15 @@ export function SeatsPage({ leg }: { leg: Leg }) {
   const isOut = leg === 'outbound';
   if (!isOut && s.tripType !== 'round') return <Redirect to="/summary" />;
   const choice = isOut ? booking.outbound! : booking.ret!;
-  const f = chosenFlight(choice)!;
+  const it = chosen(choice)!;
+  const seg = it.segments[0];
   const labels = seatedLabels(s.pax);
   const mine = booking.seats[leg];
-  const taken = unavailableSeats(f.id);
+  const taken = unavailableSeats(seg.number + it.date);
   const paidFront = choice.cabin === 'economy';
   const done = labels.every((_, i) => !!mine[i]);
+  const missing = labels.filter((_, i) => !mine[i]);
+  const frontCount = mine.filter((x) => x && isFrontRow(x)).length;
 
   const assign = (seat: string) => {
     const owner = mine.findIndex((x) => x === seat);
@@ -74,6 +77,30 @@ export function SeatsPage({ leg }: { leg: Leg }) {
     return true;
   };
 
+  if (!seatsSelectable(it)) {
+    return (
+      <>
+        <BookingHeader step={2} />
+        <main id="main" className="wrap page-seats narrow">
+          <p className="eyebrow">Step 2 of 5 · {isOut ? 'Outbound' : 'Return'} seats</p>
+          <h1>Seats are allocated at check-in</h1>
+          <div className="panel">
+            <p>
+              This journey is made of two separate tickets, so seats can’t be chosen here. Each airline allocates seats when you check in.
+            </p>
+            <p className="muted">There’s no seat charge for this journey in the estimate.</p>
+          </div>
+          <div className="page-actions">
+            <button type="button" className="btn btn-primary btn-lg" onClick={next}>
+              Continue
+            </button>
+          </div>
+        </main>
+        <SiteFooter />
+      </>
+    );
+  }
+
   return (
     <>
       <BookingHeader step={2} />
@@ -81,7 +108,7 @@ export function SeatsPage({ leg }: { leg: Leg }) {
         <p className="eyebrow">Step 2 of 5 · {isOut ? 'Outbound' : 'Return'} seats</p>
         <h1>Select your seat{labels.length > 1 ? 's' : ''}</h1>
         <div className="seats-layout">
-          <div className="plane" role="grid" aria-label={`Seat map, ${shortDate(f.date)} ${f.from} to ${f.to}`} aria-describedby="seat-help">
+          <div className="plane" role="grid" aria-label={`Seat map, flight ${seg.number}, ${shortDate(addDays(it.date, seg.departDay))}, ${seg.from} to ${seg.to}`} aria-describedby="seat-help">
             <div className="plane-nose" aria-hidden="true" />
             <div className="seat-cols" aria-hidden="true">
               <span>A</span><span>B</span><span /><span>C</span><span>D</span>
@@ -128,9 +155,14 @@ export function SeatsPage({ leg }: { leg: Leg }) {
           </div>
 
           <div className="seats-side">
-            <RouteHeading from={f.from} to={f.to} />
-            <p className="leg-date">{fullDate(f.date)}</p>
-            <Times f={f} big />
+            <RouteHeading from={it.from} to={it.to} />
+            <p className="leg-date">{fullDate(it.date)}</p>
+            <JourneySummary it={it} big />
+            {it.segments.length > 1 && (
+              <p className="muted small">
+                This seat map is for your first flight, {seg.number} ({seg.from} → {seg.to}). Seats on the connecting flight are allocated at check-in in this demo.
+              </p>
+            )}
 
             <ul className="legend" aria-label="Seat key">
               <li><span className="seat front sample" aria-hidden="true" /> Front Row {paidFront ? `+${money(FRONT_ROW_PRICE)}` : '(included)'}</li>
@@ -164,7 +196,15 @@ export function SeatsPage({ leg }: { leg: Leg }) {
               </label>
             ))}
           </fieldset>
-          <p className="sr-only" aria-live="polite">{notice}</p>
+          <p className="seat-feedback" aria-live="polite">
+            {notice}
+            {paidFront && frontCount > 0 && (
+              <span className="muted">
+                {' '}
+                Front Row seats on this journey: {frontCount} × {money(FRONT_ROW_PRICE)} = {money(frontCount * FRONT_ROW_PRICE)}.
+              </span>
+            )}
+          </p>
           <div className="seat-actions">
             {!done && (
               <button type="button" className="btn btn-ghost" onClick={autoAssign}>
@@ -177,7 +217,7 @@ export function SeatsPage({ leg }: { leg: Leg }) {
           </div>
           {!done && (
             <p id="seat-need" className="muted small">
-              Choose a seat for each passenger, or let us choose free ones.
+              You can continue once {missing.join(' and ')} {missing.length === 1 ? 'has' : 'have'} a seat. Pick one, or let us choose free standard seats.
             </p>
           )}
         </div>
@@ -186,7 +226,7 @@ export function SeatsPage({ leg }: { leg: Leg }) {
 
       <Dialog open={info === 'front'} onClose={() => setInfo(null)} title="Front Row seats">
         <p>Rows 1 and 2 have leather seats, extra legroom and are first off the plane.</p>
-        <p>{paidFront ? `They cost ${money(FRONT_ROW_PRICE)} per seat, per flight, on Economy fares.` : 'They are included with your fare.'}</p>
+        <p>{paidFront ? `They cost ${money(FRONT_ROW_PRICE)} per seat, per journey, on Economy fares.` : 'They are included with your fare.'}</p>
       </Dialog>
       <Dialog open={info === 'assist'} onClose={() => setInfo(null)} title="Assistance and services">
         {SERVICES.slice(0, 3).map((x) => (

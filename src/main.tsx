@@ -10,8 +10,10 @@ import { SeatsPage } from './pages/SeatsPage';
 import { SummaryPage } from './pages/SummaryPage';
 import { PassengersPage } from './pages/PassengersPage';
 import { PaymentPage } from './pages/PaymentPage';
+import { ComparePage } from './pages/ComparePage';
 import { ConfirmationPage, ErrorBoundary, NotFoundPage } from './pages/OtherPages';
 import { BRAND } from './components/Chrome';
+import { SkyProvider } from './components/Sky';
 
 const TITLES: Record<string, string> = {
   '/': 'Book a flight',
@@ -20,9 +22,11 @@ const TITLES: Record<string, string> = {
   '/review': 'Review flights',
   '/seats/outbound': 'Outbound seats',
   '/seats/return': 'Return seats',
-  '/summary': 'Booking summary',
+  '/compare/outbound': 'Compare outbound journeys',
+  '/compare/return': 'Compare return journeys',
+  '/summary': 'Bags and extras',
   '/passengers': 'Passenger details',
-  '/payment': 'Payment',
+  '/payment': 'Review and confirm',
   '/confirmation': 'Booking confirmed',
 };
 
@@ -45,6 +49,10 @@ function Routes() {
       return <SeatsPage key="out" leg="outbound" />;
     case '/seats/return':
       return <SeatsPage key="ret" leg="return" />;
+    case '/compare/outbound':
+      return <ComparePage key="cout" leg="outbound" />;
+    case '/compare/return':
+      return <ComparePage key="cret" leg="return" />;
     case '/summary':
       return <SummaryPage />;
     case '/passengers':
@@ -62,12 +70,14 @@ createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <RouterProvider>
+        <SkyProvider>
         <BookingProvider>
           <ComingSoonProvider>
             <a className="skip-link" href="#main">Skip to main content</a>
             <Routes />
           </ComingSoonProvider>
         </BookingProvider>
+        </SkyProvider>
       </RouterProvider>
     </ErrorBoundary>
   </React.StrictMode>,

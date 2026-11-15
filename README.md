@@ -31,22 +31,26 @@ A pre-built `dist/` is included, so `npx wrangler deploy` works without `npm ins
 
 | Part | Where | Notes |
 | --- | --- | --- |
-| Pages | `src/pages/` | Search, Flights (outbound/return), Review, Seats (outbound/return), Summary, Passengers, Payment, Confirmation, 404 |
-| Components | `src/components/` | Header + 5-step stepper, trip bar, airport combobox, date-range picker, passenger counter, dialogs |
-| Booking state | `src/lib/booking.tsx` | One reducer, saved to `sessionStorage` so refresh and Back keep choices; prices computed in `priceLines()` |
-| Sample data | `src/lib/data.ts` | 20 airports; flights, fares and seat maps generated deterministically. **Replace this module with API calls for real bookings.** |
-| Routing | `src/lib/router.tsx` | Small History-API router; moves focus to each page's heading for screen-reader users |
-| Styles | `src/styles.css` | Design tokens at the top; breakpoints at 1024px and 720px |
+| Pages | `src/pages/` | Search, Flights (outbound/return), Compare, Review flights, Seats, Bags & extras (`/summary`), Passengers, Review & confirm (`/payment`), Confirmation, 404 |
+| Components | `src/components/` | Header, 5-step stepper (completed steps are links), trip bar with expandable trip summary, journey summary and timeline, warnings, cost breakdown, flexible-dates grid, airport combobox, date picker with sample prices, passenger counter, dialogs, sky hero |
+| Sample data | `src/lib/data.ts` | Typed itineraries with legs, layovers, self-transfer, baggage and fare rules, generated deterministically and labelled as sample. **Replace `searchItineraries`, `findItinerary` and `lowestFare` with API calls for real bookings**; the UI depends only on the types. |
+| Costs | `src/lib/costs.ts` | The single calculation used everywhere: per person vs party, bags, seats, extras, taxes and costs not included (shown as unknown, never invented) |
+| Journey analysis | `src/lib/warnings.ts` | Cautious flags from itinerary fields only: airport change, self-transfer, overnight, long or short connection, early start, next-day arrival, third-country connection (links to GOV.UK) |
+| Booking state | `src/lib/booking.tsx` | One reducer saved to `sessionStorage`; edited searches keep what's still valid and explain what was cleared |
+| Sky identity | `src/components/Sky.tsx` | Day / twilight / night from local time only; CSS-only motion, paused when hidden, off for reduced motion, switchable in the footer |
+| Styles | `src/styles.css` | Tokens at the top; breakpoints at 1024px and 720px |
 
 Stack: React 19 + TypeScript, bundled with esbuild. No routing or UI library.
 
 ## Demo rules (sample, not real fare rules)
 
 - Up to 9 passengers with seats; at least one adult; one adult per infant.
-- Infants: £25 per flight, on an adult's lap, no seat.
+- Infants: £25 per journey, on an adult's lap, no seat.
+- Checked bags: Economy includes 1, Business and Premium 2, self-transfer tickets none; each extra bag is £30 per traveller per journey.
 - Front Row (rows 1–2): £18 per seat on Economy, included with Business and Premium.
-- Fast Track £9 and Lounge £35 per passenger per Economy flight (included with Business and Premium); extra bag £30 per passenger per flight.
-- Times shown are local to each airport.
+- Fast Track £9 and Lounge £35 per traveller per Economy journey (included with Business and Premium).
+- Seats are chosen for the first flight of a journey; connecting and self-transfer seats are allocated at check-in.
+- Times are local to each airport. Sky colours never represent real weather.
 
 ## Coming soon (shown as a message, by agreement)
 
@@ -54,18 +58,17 @@ Login, Language, site Search, Manage, Discover, Support, and the Hotel, Car and 
 
 ## Tests
 
-`tests/e2e.py` (Playwright for Python) runs against a local build:
-
 ```bash
-python3 tests/serve.py 8787 &
-python3 tests/e2e.py http://127.0.0.1:8787
+npx tsx tests/logic.test.ts          # cost model, warnings, search revalidation (17 tests)
+python3 tests/serve.py 8787 &        # local server with the same fallback as Cloudflare
+python3 tests/e2e.py http://127.0.0.1:8787   # 22 browser scenarios (Playwright for Python)
 ```
 
-Covers: full round trip with 2 adults + 1 infant on desktop and phone, one-way trip, search and passenger validation, sort/filter/date change, extras changing the total, page guards, 404, "coming soon" dialog, keyboard use of the airport combobox and date picker. The axe accessibility check runs when `axe-core` is installed.
+The browser suite follows the spec's test list: return journey to confirmation (desktop and phone), route and passenger changes, extras without double counting, shortlist and compare, date logic, filters to empty and reset, layover timeline, cautious warnings, back/forward/refresh, inline errors, closing every dialog, keyboard use and focus, reduced motion, no overflow at phone/tablet/desktop, routes and 404, one-way self-transfer, and an accessibility audit.
 
 ## Known limitations
 
-- Sample data only; payment is simulated and no card details are collected.
+- Sample data only. No live fares, bookings, payments or tickets; no card details are ever collected.
 - No accounts, emails or saved bookings; a booking lives in the browser tab.
-- Type-checking (`npm run typecheck`) needs `npm install`; the build environment used to create this had no npm access, so it was bundled without a type-check pass.
+- `npm run typecheck` needs `npm install`. In the environment used to build this, React's type packages couldn't be downloaded, so the code was type-checked strictly with React's own types stubbed.
 - `robots.txt` and a `noindex` tag keep the demo out of search engines; remove both before a real launch.

@@ -4,8 +4,9 @@ import { AirportField } from '../components/AirportField';
 import { DateRange } from '../components/DateRange';
 import { PassengerField } from '../components/PassengerField';
 import { useComingSoon } from '../components/Dialog';
+import { SkyHero } from '../components/Sky';
 import { Search, useBooking, money } from '../lib/booking';
-import { airportByCode, DESTINATIONS, SALES, lowestFare } from '../lib/data';
+import { airportByCode, DESTINATIONS, SALES, lowestFare, placeAirports, placeByCode } from '../lib/data';
 import { addDays, todayISO } from '../lib/dates';
 import { useRouter } from '../lib/router';
 
@@ -16,6 +17,8 @@ export function validateSearch(s: Search, today = todayISO()): Errors {
   if (!s.from) e.from = 'Choose where you are flying from.';
   if (!s.to) e.to = 'Choose where you are flying to.';
   if (s.from && s.to && s.from === s.to) e.to = 'Choose a destination different from your departure airport.';
+  else if (s.from && s.to && placeAirports(s.from).some((a) => placeAirports(s.to).includes(a)))
+    e.to = `${placeByCode(s.to)?.label} overlaps with ${placeByCode(s.from)?.label}. Choose a different city.`;
   if (!s.depart) e.depart = 'Choose a departure date.';
   else if (s.depart < today) e.depart = 'Departure date can’t be in the past.';
   if (s.tripType === 'round') {
@@ -66,6 +69,10 @@ export function SearchPage() {
   return (
     <>
       <SiteHeader />
+      <SkyHero>
+        <p className="sky-title">Find a flight that fits.</p>
+        <p className="sky-sub">Every cost and catch in plain sight, before you commit.</p>
+      </SkyHero>
       <main id="main" className="wrap page-search">
         <h1 className="sr-only">Book a flight</h1>
         <section className="search-card" aria-labelledby="search-heading">
@@ -103,7 +110,7 @@ export function SearchPage() {
               <AirportField label="To" value={s.to} exclude={s.from} onChange={(to) => update({ to })} error={errors.to} />
             </div>
             <div className="grid-2">
-              <DateRange depart={s.depart} ret={s.ret} round={s.tripType === 'round'} onChange={(depart, ret) => update({ depart, ret })} departError={errors.depart} returnError={errors.ret} />
+              <DateRange from={s.from} to={s.to} depart={s.depart} ret={s.ret} round={s.tripType === 'round'} onChange={(depart, ret) => update({ depart, ret })} departError={errors.depart} returnError={errors.ret} />
             </div>
             <div className="grid-2 bottom-row">
               <PassengerField value={s.pax} onChange={(pax) => update({ pax })} />
@@ -126,7 +133,7 @@ export function SearchPage() {
             </div>
           </section>
           <section aria-labelledby="sale-h">
-            <h2 id="sale-h">Holiday sales</h2>
+            <h2 id="sale-h">Autumn sun</h2>
             <div className="dest-row single">
               {SALES.map((d) => (
                 <DestCard key={d.code} code={d.code} from={d.from} blurb={d.blurb} onPick={() => suggest(d.from, d.code)} sale />
@@ -152,7 +159,7 @@ function DestCard({ code, from, blurb, onPick, sale }: { code: string; from: str
         <span className="dest-city">{a.city}</span>
         <span className="dest-blurb">{blurb}</span>
         <span className="dest-price">
-          From {f.city} · from {price ? money(price) : '—'}
+          From {f.city} · from {price ? `${money(price)} pp` : '—'} <span className="dest-note">(sample, in 3 weeks)</span>
         </span>
       </span>
     </button>

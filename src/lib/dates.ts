@@ -30,6 +30,10 @@ export function shortDate(s: string): string {
   const d = parseISO(s);
   return `${DAYS_SHORT[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 3)}`;
 }
+/** "Fri 13 Nov 2026": unambiguous and compact, for summaries and fields */
+export function mediumDate(s: string): string {
+  return `${shortDate(s)} ${parseISO(s).getUTCFullYear()}`;
+}
 /** "12 September 2026" */
 export function longDate(s: string): string {
   const d = parseISO(s);
