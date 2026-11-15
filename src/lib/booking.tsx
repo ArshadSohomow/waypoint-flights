@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
 import { Cabin, ExtraId, findItinerary, Itinerary } from './data';
 import { JourneyPick, Pax, seatedCount, totalPax, tripCosts, money } from './costs';
+import { pairWarnings } from './warnings';
 
 export { seatedCount, totalPax, money };
 export type { Pax };
@@ -12,9 +13,10 @@ export type PassengerType = 'adult' | 'youngAdult' | 'child' | 'infant';
 export type Passenger = { type: PassengerType; title: string; firstName: string; lastName: string; dob: string };
 export type Contact = { email: string; phone: string };
 export type Confirmation = { ref: string; total: number; at: string };
-export type Sort = 'recommended' | 'price' | 'depart' | 'duration' | 'easiest';
-export type Filters = { stops: 'any' | 'direct' | 'max1'; times: ('morning' | 'afternoon' | 'evening')[]; hideSelfTransfer: boolean; sort: Sort };
-export const DEFAULT_FILTERS: Filters = { stops: 'any', times: ['morning', 'afternoon', 'evening'], hideSelfTransfer: false, sort: 'recommended' };
+export type Sort = 'recommended' | 'price' | 'depart' | 'arrive' | 'duration' | 'easiest';
+export type TimeSlot = 'morning' | 'afternoon' | 'evening';
+export type Filters = { stops: 'any' | 'direct' | 'max1'; times: TimeSlot[]; arrTimes: TimeSlot[]; hideSelfTransfer: boolean; sort: Sort };
+export const DEFAULT_FILTERS: Filters = { stops: 'any', times: ['morning', 'afternoon', 'evening'], arrTimes: ['morning', 'afternoon', 'evening'], hideSelfTransfer: false, sort: 'recommended' };
 export const MAX_SHORTLIST = 3;
 
 export type Booking = {
@@ -30,6 +32,7 @@ export type Booking = {
   contact: Contact;
   confirmation: Confirmation | null;
   notice: string | null; // one-off message explaining what changed after an edit
+  acks: string[]; // warning ids the traveller has explicitly acknowledged, e.g. 'return-airport:<outId>:<retId>'
 };
 
 const empty: Booking = {
@@ -45,6 +48,7 @@ const empty: Booking = {
   contact: { email: '', phone: '' },
   confirmation: null,
   notice: null,
+  acks: [],
 };
 
 type Action =
@@ -59,6 +63,7 @@ type Action =
   | { type: 'passengers'; passengers: Passenger[]; contact: Contact }
   | { type: 'confirm'; confirmation: Confirmation }
   | { type: 'clearNotice' }
+  | { type: 'ack'; id: string; on: boolean }
   | { type: 'reset' };
 
 export function passengerTypes(p: Pax): PassengerType[] {
@@ -149,6 +154,8 @@ function reducer(state: Booking, a: Action): Booking {
       return { ...state, confirmation: a.confirmation };
     case 'clearNotice':
       return { ...state, notice: null };
+    case 'ack':
+      return { ...state, acks: a.on ? [...state.acks.filter((x) => x !== a.id), a.id] : state.acks.filter((x) => x !== a.id) };
     case 'reset':
       return empty;
   }
@@ -164,6 +171,7 @@ function load(): Booking {
       ...empty,
       ...b,
       seats: { ...empty.seats, ...b.seats },
+      acks: Array.isArray(b.acks) ? b.acks : [],
       extras: { ...empty.extras, ...b.extras },
       shortlist: { ...empty.shortlist, ...b.shortlist },
       filters: { outbound: { ...DEFAULT_FILTERS, ...b.filters?.outbound }, return: { ...DEFAULT_FILTERS, ...b.filters?.return } },
@@ -220,6 +228,21 @@ export function seatedLabels(p: Pax): string[] {
 /** Seats can only be chosen when the journey is on one ticket; self-transfer seats are given at check-in. */
 export const seatsSelectable = (it: Itinerary | undefined) => !!it && !it.selfTransfer;
 
+/** Id the traveller must acknowledge when outbound and return use different airports; null if none needed. */
+export function pairAckId(outId: string | undefined, retId: string | undefined): string | null {
+  const o = outId ? findItinerary(outId) : undefined;
+  const r = retId ? findItinerary(retId) : undefined;
+  if (!o || !r) return null;
+  return pairWarnings(o, r).length ? `pair:${o.id}:${r.id}` : null;
+}
+
+/** True when the chosen pair still needs the traveller's acknowledgement before they can continue. */
+export function pairNeedsAck(b: Booking): boolean {
+  if (b.search?.tripType !== 'round') return false;
+  const id = pairAckId(b.outbound?.itineraryId, b.ret?.itineraryId);
+  return !!id && !b.acks.includes(id);
+}
+
 /** How far the booking has got; pages use it to send people back if they skip ahead. */
 export function progress(b: Booking) {
   const s = b.search;
@@ -229,7 +252,7 @@ export function progress(b: Booking) {
   return {
     searched: !!s,
     outbound: !!b.outbound,
-    flights: !!b.outbound && (!needsReturn || !!b.ret),
+    flights: !!b.outbound && (!needsReturn || (!!b.ret && !pairNeedsAck(b))),
     seats: !!b.outbound && seatsDone('outbound', b.outbound) && (!needsReturn || (!!b.ret && seatsDone('return', b.ret))),
     passengers: b.passengers.length === (s ? totalPax(s.pax) : 0) && !!b.contact.email,
     confirmed: !!b.confirmation,

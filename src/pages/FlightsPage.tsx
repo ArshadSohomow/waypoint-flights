@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BookingHeader, SiteFooter } from '../components/Chrome';
 import { FareFacts, FlightDetailsButton, JourneySummary, RouteHeading, WarningList, cabinName, SampleTag } from '../components/FlightBits';
-import { DEFAULT_FILTERS, Filters, Leg, MAX_SHORTLIST, money, seatedCount, Sort, totalPax, useBooking } from '../lib/booking';
-import { CABINS, Cabin, DATA_STATUS_LABEL, EXTRA_BAG_PRICE, Itinerary, lowestFare, offerOf, searchItineraries } from '../lib/data';
+import { chosen, DEFAULT_FILTERS, Filters, Leg, MAX_SHORTLIST, money, pairAckId, seatedCount, Sort, totalPax, useBooking } from '../lib/booking';
+import { airportShort, CABINS, Cabin, DATA_STATUS_LABEL, EXTRA_BAG_PRICE, Itinerary, lowestFare, offerOf, searchItineraries, toMin } from '../lib/data';
 import { journeyEstimate } from '../lib/costs';
-import { hassle, itineraryWarnings } from '../lib/warnings';
+import { hassle, itineraryWarnings, pairWarnings } from '../lib/warnings';
+import { InfoTip } from '../components/InfoTip';
 import { addDays, duration, fullDate, mediumDate, shortDate, todayISO } from '../lib/dates';
 import { Link, Redirect, useRouter } from '../lib/router';
 import { FlexibleDates } from '../components/FlexibleDates';
@@ -12,10 +13,13 @@ import { FlexibleDates } from '../components/FlexibleDates';
 type Slot = Filters['times'][number];
 const slotOf = (hm: string): Slot => (hm < '12:00' ? 'morning' : hm < '17:00' ? 'afternoon' : 'evening');
 const SLOT_LABEL: Record<Slot, string> = { morning: 'Morning (before 12:00)', afternoon: 'Afternoon (12:00–17:00)', evening: 'Evening (after 17:00)' };
+const arriveKey = (i: Itinerary) => i.arriveDay * 1440 + toMin(i.arrive);
+const BAG_LABEL = ['No checked bag', '1 bag', '2 bags'];
 const SORT_LABEL: Record<Sort, string> = {
   recommended: 'Recommended',
   price: 'Lowest estimated total',
   depart: 'Earliest departure',
+  arrive: 'Earliest arrival',
   duration: 'Shortest journey',
   easiest: 'Fewest practical issues',
 };
@@ -67,12 +71,13 @@ export function FlightsPage({ leg }: { leg: Leg }) {
   const list = useMemo(() => {
     const filtered = all
       .filter((it) => f.times.includes(slotOf(it.depart)))
+      .filter((it) => (f.arrTimes ?? DEFAULT_FILTERS.arrTimes).includes(slotOf(it.arrive)))
       .filter((it) => (f.stops === 'direct' ? it.stops === 0 : f.stops === 'max1' ? it.stops <= 1 : true))
       .filter((it) => !(f.hideSelfTransfer && it.selfTransfer));
     const minP = Math.min(...filtered.map((i) => est(i)));
     const minD = Math.min(...filtered.map((i) => i.durationMin));
     const score = (i: Itinerary) => est(i) / minP + (i.durationMin / minD) * 0.6 + hassle(i) * 0.08;
-    const key: Record<Sort, (i: Itinerary) => number | string> = { recommended: score, price: (i) => est(i), depart: (i) => i.depart, duration: (i) => i.durationMin, easiest: hassle };
+    const key: Record<Sort, (i: Itinerary) => number | string> = { recommended: score, price: (i) => est(i), depart: (i) => i.depart, arrive: arriveKey, duration: (i) => i.durationMin, easiest: hassle };
     return [...filtered].sort((a, b) => (key[f.sort](a) < key[f.sort](b) ? -1 : key[f.sort](a) > key[f.sort](b) ? 1 : 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, f, booking.bags, pax.adults, pax.youngAdults, pax.children, pax.infants]);
@@ -108,6 +113,18 @@ export function FlightsPage({ leg }: { leg: Leg }) {
   const minDate = isOut ? todayISO() : s.depart;
   const maxDate = isOut && s.tripType === 'round' && s.ret ? s.ret : addDays(todayISO(), 330);
   const strip = Array.from({ length: 7 }, (_, i) => addDays(date, i - 3));
+  const outIt = isOut ? undefined : chosen(booking.outbound);
+  const ackId = !isOut ? pairAckId(booking.outbound?.itineraryId, chosenChoice?.itineraryId) : null;
+  const blocked = !!ackId && !booking.acks.includes(ackId);
+  const ackBox = chosenIt && ackId ? (
+    <div className="ack-box">
+      <WarningList warnings={pairWarnings(outIt, chosenIt)} compact />
+      <label className="check">
+        <input type="checkbox" checked={!blocked} onChange={(e) => dispatch({ type: 'ack', id: ackId, on: e.target.checked })} />
+        I understand: I fly out of {airportShort(outIt!.from)} and this return {outIt!.from !== chosenIt.to ? `lands at ${airportShort(chosenIt.to)}` : `leaves from ${airportShort(chosenIt.from)}`}.
+      </label>
+    </div>
+  ) : null;
   const nextPath = isOut && s.tripType === 'round' ? '/flights/return' : '/review';
   const nextLabel = isOut && s.tripType === 'round' ? 'Continue to return flight' : 'Continue to review flights';
   const setF = (patch: Partial<Filters>) => dispatch({ type: 'filters', leg, filters: { ...f, ...patch } });
@@ -175,16 +192,21 @@ export function FlightsPage({ leg }: { leg: Leg }) {
 
         <section className="toolbar" aria-label="Bags, filters and sorting">
           <fieldset className="bags-pick">
-            <legend>Checked bags per traveller</legend>
+            <legend>
+              Checked bags per traveller{' '}
+              <InfoTip label="What counts as a checked bag?">
+                A checked bag goes in the hold and is collected at baggage reclaim. Every fare here includes at least one cabin bag you keep with you. Choose <strong>No checked bag</strong> if you’re travelling with cabin bags only: nothing extra is added.
+              </InfoTip>
+            </legend>
             <div className="seg">
               {[0, 1, 2].map((b) => (
                 <label key={b} className={booking.bags === b ? 'on' : ''}>
                   <input type="radio" name={`bags-${leg}`} value={b} checked={booking.bags === b} onChange={() => dispatch({ type: 'bags', bags: b })} />
-                  {b}
+                  {BAG_LABEL[b]}
                 </label>
               ))}
             </div>
-            <p className="hint">Bags your fare doesn’t include are added at {money(EXTRA_BAG_PRICE)} each, per journey.</p>
+            <p className="hint">{booking.bags === 0 ? 'Cabin bags only. No bag charges are added.' : `Bags your fare doesn’t include are added at ${money(EXTRA_BAG_PRICE)} each, per journey.`}</p>
           </fieldset>
           <div className="tool-actions">
             <button type="button" className="btn btn-small btn-soft" aria-expanded={showFilters} aria-controls="filters" onClick={() => setShowFilters((v) => !v)}>
@@ -225,6 +247,15 @@ export function FlightsPage({ leg }: { leg: Leg }) {
               {(['morning', 'afternoon', 'evening'] as Slot[]).map((sl) => (
                 <label key={sl} className="check">
                   <input type="checkbox" checked={f.times.includes(sl)} onChange={(e) => setF({ times: e.target.checked ? [...f.times, sl] : f.times.filter((x) => x !== sl) })} />
+                  {SLOT_LABEL[sl]}
+                </label>
+              ))}
+            </fieldset>
+            <fieldset>
+              <legend>Arrival time</legend>
+              {(['morning', 'afternoon', 'evening'] as Slot[]).map((sl) => (
+                <label key={sl} className="check">
+                  <input type="checkbox" checked={f.arrTimes.includes(sl)} onChange={(e) => setF({ arrTimes: e.target.checked ? [...f.arrTimes, sl] : f.arrTimes.filter((x) => x !== sl) })} />
                   {SLOT_LABEL[sl]}
                 </label>
               ))}
@@ -299,7 +330,7 @@ export function FlightsPage({ leg }: { leg: Leg }) {
               const e = best ? journeyEstimate(it, best.cabin, s.pax, booking.bags) : null;
               const isChosen = chosenChoice?.itineraryId === it.id;
               const listed = shortlist.includes(it.id);
-              const w = itineraryWarnings(it);
+              const w = [...(outIt ? pairWarnings(outIt, it) : []), ...itineraryWarnings(it)];
               const tags = [ins.cheapest === it.id && 'Lowest estimated total', ins.fastest === it.id && 'Fastest', ins.easiest === it.id && 'Fewest issues'].filter(Boolean) as string[];
               return (
                 <li key={it.id} id={`it-${it.id}`} className={`flight ${isChosen ? 'chosen' : ''} ${open ? 'open' : ''}`}>
@@ -391,9 +422,15 @@ export function FlightsPage({ leg }: { leg: Leg }) {
                         <strong>✓ {cabinName(chosenChoice!.cabin)} on the {it.depart} journey is selected.</strong> Estimated {money(journeyEstimate(it, chosenChoice!.cabin, s.pax, booking.bags)!.total)} for{' '}
                         {n} traveller{n === 1 ? '' : 's'}.
                       </p>
-                      <button type="button" className="btn btn-primary" onClick={() => navigate(nextPath)}>
+                      {ackBox}
+                      <button type="button" className="btn btn-primary" disabled={blocked} aria-describedby={blocked ? 'ack-why' : undefined} onClick={() => navigate(nextPath)}>
                         {nextLabel}
                       </button>
+                      {blocked && (
+                        <p id="ack-why" className="muted small">
+                          Tick the box above to confirm the airport difference, or choose another return.
+                        </p>
+                      )}
                     </div>
                   )}
                 </li>
@@ -408,8 +445,8 @@ export function FlightsPage({ leg }: { leg: Leg }) {
               <p>
                 <span className="muted">Selected:</span> {chosenIt.depart} → {chosenIt.arrive} · {cabinName(chosenChoice.cabin)} · Est. {money(journeyEstimate(chosenIt, chosenChoice.cabin, s.pax, booking.bags)!.total)}
               </p>
-              <button type="button" className="btn btn-primary" onClick={() => navigate(nextPath)}>
-                {nextLabel}
+              <button type="button" className="btn btn-primary" disabled={blocked} title={blocked ? 'Confirm the airport difference first' : undefined} onClick={() => navigate(nextPath)}>
+                {blocked ? 'Confirm airports to continue' : nextLabel}
               </button>
             </div>
           </div>
