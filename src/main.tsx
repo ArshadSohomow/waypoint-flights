@@ -2,7 +2,6 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider, useRouter } from './lib/router';
 import { BookingProvider } from './lib/booking';
-import { ComingSoonProvider } from './components/Dialog';
 import { SearchPage } from './pages/SearchPage';
 import { FlightsPage } from './pages/FlightsPage';
 import { ReviewPage } from './pages/ReviewPage';
@@ -14,6 +13,9 @@ import { ComparePage } from './pages/ComparePage';
 import { ConfirmationPage, ErrorBoundary, NotFoundPage } from './pages/OtherPages';
 import { BRAND } from './components/Chrome';
 import { SkyProvider } from './components/Sky';
+import { AccountPage, CheckInPage, ManagePage } from './pages/TripPages';
+import { CarsPage, HotelsPage } from './pages/StayPages';
+import { DiscoverPage, SiteSearchPage, SupportPage } from './pages/ExplorePages';
 
 const TITLES: Record<string, string> = {
   '/': 'Book a flight',
@@ -28,6 +30,14 @@ const TITLES: Record<string, string> = {
   '/passengers': 'Passenger details',
   '/payment': 'Review and confirm',
   '/confirmation': 'Booking confirmed',
+  '/manage': 'Manage booking',
+  '/check-in': 'Online check-in',
+  '/hotels': 'Stays',
+  '/cars': 'Car hire',
+  '/discover': 'Discover destinations',
+  '/support': 'Help and support',
+  '/search': 'Search',
+  '/account': 'Your trips',
 };
 
 function Routes() {
@@ -61,6 +71,22 @@ function Routes() {
       return <PaymentPage />;
     case '/confirmation':
       return <ConfirmationPage />;
+    case '/manage':
+      return <ManagePage />;
+    case '/check-in':
+      return <CheckInPage />;
+    case '/hotels':
+      return <HotelsPage />;
+    case '/cars':
+      return <CarsPage />;
+    case '/discover':
+      return <DiscoverPage />;
+    case '/support':
+      return <SupportPage />;
+    case '/search':
+      return <SiteSearchPage />;
+    case '/account':
+      return <AccountPage />;
     default:
       return <NotFoundPage />;
   }
@@ -72,10 +98,8 @@ createRoot(document.getElementById('root')!).render(
       <RouterProvider>
         <SkyProvider>
         <BookingProvider>
-          <ComingSoonProvider>
-            <a className="skip-link" href="#main">Skip to main content</a>
-            <Routes />
-          </ComingSoonProvider>
+          <a className="skip-link" href="#main">Skip to main content</a>
+          <Routes />
         </BookingProvider>
         </SkyProvider>
       </RouterProvider>

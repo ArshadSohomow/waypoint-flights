@@ -4,12 +4,21 @@ import { SkyHero } from '../components/Sky';
 import { LegCard } from './ReviewPage';
 import { money, useBooking } from '../lib/booking';
 import { Link, Redirect, useRouter } from '../lib/router';
+import { saveTrip, tripFromBooking } from '../lib/trips';
+import { placeAirports, placeByCode } from '../lib/data';
 
 export function ConfirmationPage() {
   const { booking, dispatch } = useBooking();
   const { navigate } = useRouter();
   const c = booking.confirmation;
+  // Keep a copy in this browser so Manage booking, Check-in, Stays and Car hire can find it.
+  React.useEffect(() => {
+    const t = tripFromBooking(booking);
+    if (t) saveTrip(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c?.ref]);
   if (!c || !booking.search) return <Redirect to="/" />;
+  const city = placeByCode(booking.search.to)?.city ?? '';
   const lead = booking.passengers[0];
   return (
     <>
@@ -41,6 +50,39 @@ export function ConfirmationPage() {
           <p className="total-line">
             Demo total <strong>{money(c.total)}</strong> <span className="muted small">(nothing was charged)</span>
           </p>
+        </section>
+        <section className="panel next-steps" aria-labelledby="next-h">
+          <h2 id="next-h">Complete your trip</h2>
+          <p className="muted">Your booking is saved in this browser. Find it any time with reference {c.ref}.</p>
+          <ul className="plain hub-tiles">
+            <li>
+              <Link to={`/hotels?ref=${c.ref}`} className="hub-tile">
+                <span className="hub-ico" aria-hidden="true">⌂</span>
+                <span className="hub-tile-text">
+                  <strong>Add a stay in {city}</strong>
+                  <span>Sample hotels for your dates</span>
+                </span>
+              </Link>
+            </li>
+            <li>
+              <Link to={`/cars?ref=${c.ref}`} className="hub-tile">
+                <span className="hub-ico" aria-hidden="true">⛟</span>
+                <span className="hub-tile-text">
+                  <strong>Hire a car</strong>
+                  <span>Pick up at {placeAirports(booking.search.to).length > 1 ? 'your arrival airport' : placeAirports(booking.search.to)[0]}</span>
+                </span>
+              </Link>
+            </li>
+            <li>
+              <Link to={`/manage?ref=${c.ref}`} className="hub-tile">
+                <span className="hub-ico" aria-hidden="true">☰</span>
+                <span className="hub-tile-text">
+                  <strong>Manage booking</strong>
+                  <span>Check in, print or make changes</span>
+                </span>
+              </Link>
+            </li>
+          </ul>
         </section>
         <div className="page-actions">
           <button

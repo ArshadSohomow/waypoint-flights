@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useRouter } from '../lib/router';
-import { useComingSoon } from './Dialog';
+import { Dialog } from './Dialog';
 import { costs, money, progress, totalPax, useBooking } from '../lib/booking';
 import { placeShort, DATA_STATUS_LABEL } from '../lib/data';
 import { mediumDate } from '../lib/dates';
@@ -18,23 +18,65 @@ function Logo() {
   );
 }
 
+export const NAV: { name: string; to: string }[] = [
+  { name: 'Book', to: '/' },
+  { name: 'Manage', to: '/manage' },
+  { name: 'Check-in', to: '/check-in' },
+  { name: 'Stays', to: '/hotels' },
+  { name: 'Car hire', to: '/cars' },
+  { name: 'Discover', to: '/discover' },
+  { name: 'Support', to: '/support' },
+];
+
+/** Where the in-progress booking was last seen, so "Back to your booking" can return there. */
+export const LAST_STEP_KEY = 'wp-last-step';
+export function lastBookingStep(): string | null {
+  try {
+    return sessionStorage.getItem(LAST_STEP_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function ResumeBanner() {
+  const { booking } = useBooking();
+  const { path } = useRouter();
+  const last = lastBookingStep();
+  if (!booking.search || booking.confirmation || !last || path === '/') return null;
+  return (
+    <div className="resume-bar" role="region" aria-label="Booking in progress">
+      <div className="wrap resume-inner">
+        <p>
+          <Beacon size={18} /> Your {placeShort(booking.search.from)} to {placeShort(booking.search.to)} booking is saved.
+        </p>
+        <Link to={last} className="btn btn-small btn-primary">
+          Back to your booking
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function SiteHeader() {
-  const soon = useComingSoon();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [langOpen, setLangOpen] = React.useState(false);
+  const { path } = useRouter();
+  const section = '/' + (path.split('/')[1] ?? '');
+  useEffect(() => setMenuOpen(false), [path]);
   return (
     <header className="site-header">
       <div className="bar wrap">
         <Logo />
         <div className="header-actions">
-          <button type="button" className="btn btn-ghost hide-sm" onClick={() => soon('Site search')}>
-            Search
+          <Link to="/search" className="btn btn-ghost hide-sm" aria-current={section === '/search' ? 'page' : undefined}>
+            <SearchIcon /> Search
+          </Link>
+          <button type="button" className="btn btn-ghost hide-sm" onClick={() => setLangOpen(true)}>
+            <GlobeIcon /> EN · £
           </button>
-          <button type="button" className="btn btn-ghost hide-sm" onClick={() => soon('Language options')}>
-            Language
-          </button>
-          <button type="button" className="btn btn-outline" onClick={() => soon('Login')}>
-            Login
-          </button>
+          <Link to="/account" className="btn btn-outline" aria-current={section === '/account' ? 'page' : undefined}>
+            Your trips
+          </Link>
           <button type="button" className="icon-btn show-sm" aria-expanded={menuOpen} aria-controls="main-nav" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
             ☰
           </button>
@@ -42,31 +84,73 @@ export function SiteHeader() {
       </div>
       <nav id="main-nav" className={`main-nav ${menuOpen ? 'open' : ''}`} aria-label="Main">
         <ul className="wrap">
-          <li>
-            <Link to="/" aria-current="page">
-              Book
-            </Link>
-          </li>
-          {['Manage', 'Discover', 'Support'].map((n) => (
-            <li key={n}>
-              <button type="button" onClick={() => soon(n === 'Manage' ? 'Manage booking' : n)}>
-                {n}
-              </button>
+          {NAV.map((n) => (
+            <li key={n.to}>
+              <Link to={n.to} aria-current={section === n.to || (n.to === '/' && path === '/') ? 'page' : undefined}>
+                {n.name}
+              </Link>
             </li>
           ))}
           <li className="show-sm">
-            <button type="button" onClick={() => soon('Site search')}>
-              Search
-            </button>
+            <Link to="/search">Search the site</Link>
           </li>
           <li className="show-sm">
-            <button type="button" onClick={() => soon('Language options')}>
-              Language
+            <button type="button" onClick={() => setLangOpen(true)}>
+              Language and currency
             </button>
           </li>
         </ul>
       </nav>
+      <ResumeBanner />
+      <LanguageDialog open={langOpen} onClose={() => setLangOpen(false)} />
     </header>
+  );
+}
+
+const LANGS = [
+  { code: 'en-GB', name: 'English (UK)', native: 'English (UK)', ready: true },
+  { code: 'es', name: 'Spanish', native: 'Español', ready: false },
+  { code: 'fr', name: 'French', native: 'Français', ready: false },
+  { code: 'de', name: 'German', native: 'Deutsch', ready: false },
+  { code: 'it', name: 'Italian', native: 'Italiano', ready: false },
+  { code: 'pt', name: 'Portuguese', native: 'Português', ready: false },
+];
+
+function LanguageDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <Dialog open={open} onClose={onClose} title="Language and currency" footer={<button type="button" className="btn btn-primary" onClick={onClose}>Done</button>}>
+      <fieldset className="lang-list">
+        <legend>Language</legend>
+        {LANGS.map((l) => (
+          <label key={l.code} className={`radio lang ${l.ready ? '' : 'not-ready'}`}>
+            <input type="radio" name="lang" checked={l.ready} disabled={!l.ready} readOnly />
+            <span lang={l.code}>{l.native}</span>
+            {!l.ready && <span className="muted small">Translation not available yet</span>}
+          </label>
+        ))}
+      </fieldset>
+      <p>
+        <strong>Currency:</strong> pounds sterling (GBP, £). All sample prices are shown in pounds.
+      </p>
+      <p className="muted small">The demo is in English only. Other languages are listed so you can see where they’d be offered.</p>
+    </Dialog>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M13 13l4.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+function GlobeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M2.5 10h15M10 2.5c2.2 2.3 2.2 12.7 0 15M10 2.5c-2.2 2.3-2.2 12.7 0 15" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
   );
 }
 
@@ -120,15 +204,22 @@ function Stepper({ current }: { current: number }) {
 }
 
 export function BookingHeader({ step }: { step: number }) {
-  const soon = useComingSoon();
+  const { path } = useRouter();
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(LAST_STEP_KEY, path);
+    } catch {
+      /* ignore */
+    }
+  }, [path]);
   return (
     <header className="site-header booking-header">
       <div className="bar wrap">
         <Logo />
         <Stepper current={step} />
-        <button type="button" className="btn btn-outline hide-sm" onClick={() => soon('Login')}>
-          Login
-        </button>
+        <Link to="/account" className="btn btn-outline hide-sm" title="Your booking stays saved while you look">
+          Your trips
+        </Link>
       </div>
       <TripBar />
       <Notice />
@@ -170,7 +261,9 @@ function TripBar() {
         <div className="trip-bar-total">
           <p className="trip-total" aria-live="polite">
             <span className="trip-total-label">Estimated total{lines.length ? ` · ${n} traveller${n === 1 ? '' : 's'}` : ''}</span>
-            <span className="trip-total-amount">{lines.length ? money(total) : 'Choose a flight'}</span>
+            <span className="trip-total-amount hum" key={total}>
+              {lines.length ? money(total) : 'Choose a flight'}
+            </span>
           </p>
           <button type="button" className="link-btn" aria-expanded={open} aria-controls="trip-panel" onClick={() => setOpen((o) => !o)}>
             {open ? 'Hide trip summary' : 'Show trip summary'}
@@ -210,14 +303,37 @@ function Notice() {
   );
 }
 
+const FOOTER: { title: string; links: [string, string][] }[] = [
+  { title: 'Fly', links: [['Book a flight', '/'], ['Discover destinations', '/discover']] },
+  { title: 'Your trip', links: [['Manage booking', '/manage'], ['Online check-in', '/check-in'], ['Your trips', '/account']] },
+  { title: 'Stay and travel', links: [['Hotels and stays', '/hotels'], ['Car hire', '/cars']] },
+  { title: 'Help', links: [['Help centre', '/support'], ['Search the site', '/search']] },
+];
+
 export function SiteFooter() {
   return (
     <footer className="site-footer">
-      <div className="wrap footer-inner">
-        <p>
-          <strong>{BRAND}</strong> is a demonstration site. {DATA_STATUS_LABEL}; no real bookings, tickets or payments are made.
-        </p>
-        <AmbientControls />
+      <div className="wrap">
+        <nav className="footer-nav" aria-label="Site map">
+          {FOOTER.map((c) => (
+            <div key={c.title}>
+              <h2 className="footer-h">{c.title}</h2>
+              <ul>
+                {c.links.map(([l, to]) => (
+                  <li key={to}>
+                    <Link to={to}>{l}</Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+        <div className="footer-inner">
+          <p>
+            <strong>{BRAND}</strong> is a demonstration site. {DATA_STATUS_LABEL}; no real bookings, tickets or payments are made.
+          </p>
+          <AmbientControls />
+        </div>
       </div>
     </footer>
   );
