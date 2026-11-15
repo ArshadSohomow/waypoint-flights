@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import { searchItineraries, lowestFare, findItinerary, offerOf, EXTRA_BAG_PRICE, INFANT_FARE, FRONT_ROW_PRICE } from '../src/lib/data';
 import { tripCosts, journeyEstimate } from '../src/lib/costs';
 import { itineraryWarnings, pairWarnings } from '../src/lib/warnings';
-import { applySearch, Booking, DEFAULT_FILTERS } from '../src/lib/booking';
+import { applySearch, Booking, DEFAULT_FILTERS, pairAckId, pairNeedsAck, progress } from '../src/lib/booking';
+import { searchHotels, searchCars, siteSearch, guideFacts, GUIDES, nightsBetween } from '../src/lib/hub';
+import { airportByCode } from '../src/lib/data';
 
 let passed = 0;
 const test = (name: string, fn: () => void) => {
@@ -117,6 +119,7 @@ const base: Booking = {
   contact: { email: '', phone: '' },
   confirmation: null,
   notice: null,
+  acks: [],
 };
 
 test('changing the route clears flights and seats and explains why', () => {
@@ -145,6 +148,47 @@ test('an unchanged search keeps everything and shows no notice', () => {
   const n = applySearch(base, { ...base.search! });
   assert.equal(n.outbound, base.outbound);
   assert.equal(n.notice, null);
+});
+
+test('a return to a different London airport needs an explicit acknowledgement before continuing', () => {
+  const out = searchItineraries('LON', 'BCN', D).find((i) => i.from === 'LHR')!;
+  const ret = searchItineraries('BCN', 'LON', '2026-11-20').find((i) => i.to === 'LGW')!;
+  const b: Booking = { ...base, search: { ...base.search!, from: 'LON' }, outbound: { itineraryId: out.id, cabin: 'economy' }, ret: { itineraryId: ret.id, cabin: 'economy' } };
+  const id = pairAckId(out.id, ret.id)!;
+  assert.ok(id);
+  assert.equal(pairNeedsAck(b), true);
+  assert.equal(progress(b).flights, false, 'cannot move past flights until acknowledged');
+  const acked = { ...b, acks: [id] };
+  assert.equal(pairNeedsAck(acked), false);
+  assert.equal(progress(acked).flights, true);
+  const same = searchItineraries('BCN', 'LON', '2026-11-20').find((i) => i.to === 'LHR')!;
+  assert.equal(pairAckId(out.id, same.id), null, 'same airport both ways needs no acknowledgement');
+});
+
+test('sample stays and cars are deterministic, priced and labelled per night / per day', () => {
+  const a = searchHotels('BCN', '2026-12-01', 2);
+  assert.deepEqual(a, searchHotels('BCN', '2026-12-01', 2));
+  assert.ok(a.length >= 7 && a.every((h) => h.pricePerNight > 0 && h.stars >= 2 && h.stars <= 5));
+  assert.deepEqual(searchHotels('LON', '2026-12-01', 2).map((h) => h.city)[0], 'London');
+  const c = searchCars('BCN', '2026-12-01');
+  assert.ok(c.length > 0 && c.every((x) => x.pricePerDay > 0));
+  assert.equal(searchCars('XXX', '2026-12-01').length, 0);
+  assert.equal(nightsBetween('2026-12-01', '2026-12-05'), 4);
+});
+
+test('every destination guide is a real airport in the data, with a sample fare from London', () => {
+  for (const g of GUIDES) {
+    assert.ok(airportByCode(g.code), g.code);
+    const f = guideFacts('LON', g.code, D);
+    assert.ok(f && f.fastest > 0, `no sample journeys LON→${g.code}`);
+  }
+});
+
+test('site search finds pages, destinations and help', () => {
+  assert.ok(siteSearch('lisbon').some((h) => h.kind === 'Destination'));
+  assert.ok(siteSearch('check in').some((h) => h.to === '/check-in'));
+  assert.ok(siteSearch('self-transfer').some((h) => h.kind === 'Help'));
+  assert.equal(siteSearch('').length, 0);
 });
 
 console.log(`\n${passed} logic tests passed${process.exitCode ? ', some FAILED' : ''}.`);

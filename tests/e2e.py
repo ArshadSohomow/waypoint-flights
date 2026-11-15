@@ -88,8 +88,8 @@ def full_journey(page):
     page.reload()
     page.get_by_role('button', name='Search flights').click()
     expect(page.locator('.error-summary')).to_contain_text('Choose where you are flying from')
-    pick_airport(page, 'From', 'Amster', 'AMS')
-    pick_airport(page, 'To', 'barc', 'BCN')
+    pick_airport(page, 'Departs from', 'Amster', 'AMS')
+    pick_airport(page, 'Arrives at', 'barc', 'BCN')
     pick_dates(page)
     page.get_by_role('button', name=re.compile('Passengers')).click()
     page.get_by_role('button', name='More adults').click()
@@ -138,7 +138,7 @@ def change_origin(page):
     seed(page)
     choose(page, card_filter='Direct')
     page.get_by_role('button', name=re.compile('^Edit search')).click()
-    pick_airport(page, 'From', 'Lisbon', 'LIS')
+    pick_airport(page, 'Departs from', 'Lisbon', 'LIS')
     page.get_by_role('button', name='Search flights').click()
     expect(page.locator('.notice-bar')).to_contain_text('outbound flight')
     expect(page.locator('.chosen-confirm')).to_have_count(0)
@@ -229,7 +229,7 @@ def filters(page):
     page.get_by_role('button', name=re.compile('^Filters')).click()
     page.get_by_label('Direct only').check()
     for t in ['Morning', 'Afternoon', 'Evening']:
-        page.get_by_label(re.compile(f'^{t}')).uncheck()
+        page.get_by_role('group', name='Departure time').get_by_label(re.compile(f'^{t}')).uncheck()
     expect(page.get_by_role('heading', name='No journeys match your filters')).to_be_visible()
     page.locator('.empty').get_by_role('button', name='Reset filters').click()
     expect(page.locator('.flight').first).to_be_visible()
@@ -284,8 +284,8 @@ def invalid(page):
     page.goto(BASE + '/')
     page.evaluate('sessionStorage.clear()')
     page.reload()
-    pick_airport(page, 'From', 'London', 'all airports')
-    pick_airport(page, 'To', 'Heathrow', 'LHR')
+    pick_airport(page, 'Departs from', 'London', 'all airports')
+    pick_airport(page, 'Arrives at', 'Heathrow', 'LHR')
     page.get_by_role('button', name='Search flights').click()
     expect(page.locator('.error-summary')).to_contain_text('overlaps with London (all airports)')
     expect(page.locator('.error-summary')).to_contain_text('Choose a departure date')
@@ -294,11 +294,11 @@ def invalid(page):
 # 12. Every dialog closes with its button and Escape
 def dialogs(page):
     page.goto(BASE + '/')
-    page.get_by_role('tab', name='Hotel').click()
+    page.get_by_role('button', name=re.compile('EN')).click()
     expect(page.get_by_role('dialog')).to_be_visible()
     page.get_by_role('dialog').get_by_role('button', name='Close').click()
     expect(page.get_by_role('dialog')).to_have_count(0)
-    page.get_by_role('button', name='Login').click()
+    page.get_by_role('button', name=re.compile('EN')).click()
     page.keyboard.press('Escape')
     expect(page.get_by_role('dialog')).to_have_count(0)
     seed(page)
@@ -319,7 +319,7 @@ def keyboard(page):
     page.goto(BASE + '/')
     page.evaluate('sessionStorage.clear()')
     page.reload()
-    box = page.get_by_role('combobox', name='From')
+    box = page.get_by_role('combobox', name='Departs from')
     box.focus()
     page.keyboard.type('paris')
     page.keyboard.press('Enter')
@@ -420,6 +420,146 @@ def one_way_self_transfer(page):
     expect(page.locator('.breakdown')).to_contain_text('transfer LGW → LHR')
 
 
+# 19. Early airport-mismatch warning must be acknowledged before continuing
+def airport_ack(page):
+    seed(page, {**SEED, 'search': {**SEED['search'], 'from': 'LON', 'to': 'BCN'}})
+    choose(page, card_filter='LHR')
+    page.get_by_role('button', name='Continue to return flight').first.click()
+    card = choose(page, card_filter='LGW')
+    expect(card.locator('.ack-box')).to_contain_text('different airport')
+    btn = card.get_by_role('button', name='Continue to review flights')
+    expect(btn).to_be_disabled()
+    card.locator('.ack-box').get_by_role('checkbox').check()
+    expect(btn).to_be_enabled()
+    btn.click()
+    expect(page).to_have_url(re.compile('/review'))
+
+
+# 20. Manage the example booking, hold a stay and a car, check in
+def hub_trip(page):
+    page.goto(BASE + '/')
+    page.evaluate('localStorage.clear(); sessionStorage.clear()')
+    if page.get_by_role('button', name='Menu').is_visible():
+        page.get_by_role('button', name='Menu').click()
+    page.get_by_role('navigation', name='Main').get_by_role('link', name='Manage').click()
+    expect(page).to_have_url(re.compile('/manage'))
+    page.get_by_role('button', name='Find my booking').click()
+    expect(page.get_by_role('alert')).to_contain_text('Enter your booking reference')
+    page.get_by_label('Booking reference').fill('WPDEMO')
+    page.get_by_label('Last name').fill('Nobody')
+    page.get_by_role('button', name='Find my booking').click()
+    expect(page.get_by_role('alert')).to_contain_text('couldn’t find')
+    page.get_by_role('button', name='Fill in the example booking').click()
+    page.get_by_role('button', name='Find my booking').click()
+    expect(page.locator('.trip-head')).to_contain_text('London (all airports) to Barcelona (BCN)')
+    shot(page, 'h01-manage')
+    page.get_by_role('link', name=re.compile('Add a stay')).click()
+    expect(page).to_have_url(re.compile(r'/hotels\?ref=WPDEMO'))
+    expect(page.locator('.listing-card').first).to_be_visible()
+    page.get_by_label('Free cancellation').check()
+    page.get_by_label('Sort by').select_option('distance')
+    page.locator('.listing-card').first.get_by_role('button', name=re.compile('Hold for trip WPDEMO')).click()
+    expect(page.locator('.hold-done')).to_contain_text('held on booking WPDEMO')
+    shot(page, 'h02-hotels')
+    page.locator('.hold-done').get_by_role('link', name='View your trip').click()
+    expect(page.locator('.hold-list li')).to_have_count(1)
+    page.get_by_role('link', name=re.compile('Hire a car')).click()
+    page.get_by_label('Automatic only').check()
+    page.locator('.listing-card').first.get_by_role('button', name=re.compile('Hold for trip')).click()
+    page.locator('.hold-done').get_by_role('link', name='View your trip').click()
+    expect(page.locator('.hold-list li')).to_have_count(2)
+    page.get_by_role('link', name=re.compile('Check in online')).click()
+    page.get_by_role('button', name=re.compile('Check in all 2')).click()
+    expect(page.get_by_role('alert')).to_contain_text('confirm both')
+    page.get_by_label(re.compile('checked the passport')).check()
+    page.get_by_label(re.compile('Nobody is carrying')).check()
+    page.get_by_role('button', name=re.compile('Check in all 2')).click()
+    expect(page.locator('.pass').first).to_contain_text('SAMPLE')
+    expect(page.locator('.pass')).to_have_count(2)
+    shot(page, 'h03-passes')
+    page.get_by_role('link', name='Your trips').first.click()
+    expect(page.locator('.trip-card')).to_contain_text('WPDEMO')
+    page.goto(BASE + '/manage?ref=WPDEMO')
+    page.get_by_role('button', name='Cancel this booking').click()
+    page.keyboard.press('Escape')
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    page.get_by_role('button', name='Cancel this booking').click()
+    page.get_by_role('dialog').get_by_role('button', name='Cancel booking').click()
+    expect(page.locator('.status-pill')).to_have_text('Cancelled')
+    expect(page.locator('.hold-list li')).to_have_count(0)
+
+
+# 21. A real demo booking is saved and can be found again by reference
+def booking_saved(page):
+    page.goto(BASE + '/')
+    page.evaluate('localStorage.clear()')
+    full_journey(page)
+    ref = page.locator('.ref strong').inner_text()
+    page.get_by_role('link', name=re.compile('Manage booking')).first.click()
+    expect(page.locator('.trip-head')).to_contain_text(ref)
+    page.goto(BASE + '/manage')
+    page.get_by_label('Booking reference').fill(ref.lower())
+    page.get_by_label('Last name').fill('TEST')
+    page.get_by_role('button', name='Find my booking').click()
+    expect(page.locator('.trip-head')).to_contain_text('Amsterdam')
+
+
+# 22. Home tabs, site search and Discover hand off correctly
+def hub_nav(page):
+    page.goto(BASE + '/')
+    page.evaluate('localStorage.clear(); sessionStorage.clear()')
+    page.reload()
+    page.get_by_role('tab', name='Stays').click()
+    expect(page.get_by_role('tabpanel')).to_contain_text('Hotels and apartments')
+    page.get_by_role('tab', name='Stays').press('ArrowRight')
+    expect(page.get_by_role('tab', name='Car hire')).to_have_attribute('aria-selected', 'true')
+    page.get_by_role('tab', name='Flights').click()
+    btn = page.locator('.search-cta')
+    expect(page.locator('#cta-progress')).to_have_text('0 of 4 details added')
+    pick_airport(page, 'Departs from', 'Amster', 'AMS')
+    expect(page.locator('#cta-progress')).to_have_text('1 of 4 details added')
+    page.get_by_role('link', name='Search', exact=True).click()
+    page.get_by_label('What are you looking for?').fill('lisbon')
+    page.get_by_role('button', name='Search', exact=True).click()
+    page.locator('.search-hits').get_by_role('link', name=re.compile('Lisbon')).first.click()
+    expect(page).to_have_url(re.compile('/discover'))
+    card = page.locator('#LIS')
+    expect(card).to_be_visible()
+    card.get_by_role('link', name=re.compile('Search flights')).click()
+    expect(page.get_by_role('combobox', name='Arrives at')).to_have_value(re.compile('LIS'))
+    expect(page.locator('#cta-progress')).to_have_text('Ready to search')
+    page.goto(BASE + '/support#bags')
+    expect(page.locator('#bags')).to_have_attribute('open', '')
+    page.get_by_label('Search help').fill('self-transfer')
+    expect(page.locator('.faq')).to_have_count(1)
+    page.goto(BASE + '/account')
+    expect(page.get_by_role('heading', name='About sign-in')).to_be_visible()
+    expect(page.locator('input[type=password]')).to_have_count(0)
+
+
+def a11y_hub(page):
+    problems = []
+    page.goto(BASE + '/')
+    page.evaluate('localStorage.clear()')
+    for path in ['/manage', '/manage?ref=WPDEMO', '/check-in', '/hotels?city=BCN&in=2026-12-01&out=2026-12-04', '/cars?ap=BCN&pu=2026-12-01&do=2026-12-04', '/discover', '/support', '/search?q=bags', '/account']:
+        if path == '/manage?ref=WPDEMO':
+            page.goto(BASE + '/manage')
+            page.get_by_role('button', name='Fill in the example booking').click()
+            page.get_by_role('button', name='Find my booking').click()
+        else:
+            page.goto(BASE + path)
+        problems += [f'{path}: {x}' for x in page.evaluate(A11Y_JS)]
+    assert not problems, '; '.join(problems[:6])
+
+
+def hub_widths(page):
+    w = page.viewport_size['width']
+    for path in ['/manage', '/hotels?city=BCN&in=2026-12-01&out=2026-12-04', '/cars?ap=BCN&pu=2026-12-01&do=2026-12-04', '/discover', '/support', '/account', '/check-in']:
+        page.goto(BASE + path)
+        sw = page.evaluate('document.documentElement.scrollWidth')
+        assert sw <= w + 1, f'{path} overflows: {sw} > {w}'
+
+
 check('1  Return journey to review and demo confirmation', full_journey)
 check('2  Changing origin resets stale selections', change_origin)
 check('3  Passenger count updates price basis and totals', pax_change)
@@ -442,6 +582,14 @@ check('16 Deep routes, guards and 404', routes)
 check('17 One way with self-transfer', one_way_self_transfer)
 check('1  Full journey on a phone', full_journey, PHONE)
 check('18 Accessibility checks on key pages', a11y)
+check('19 Different return airport must be acknowledged', airport_ack)
+check('20 Hub: manage, hold stay and car, check in, cancel', hub_trip)
+check('20 Hub flow on a phone', hub_trip, PHONE)
+check('21 Confirmed booking is saved and found by reference', booking_saved)
+check('22 Home tabs, CTA progress, site search, Discover, Support', hub_nav)
+check('23 Accessibility checks on hub pages', a11y_hub)
+check('24 Hub pages: no overflow on phone', hub_widths, PHONE)
+check('24 Hub pages: no overflow on tablet', hub_widths, TABLET)
 
 w = max(len(r[0]) for r in results)
 for n, s, e in results:
